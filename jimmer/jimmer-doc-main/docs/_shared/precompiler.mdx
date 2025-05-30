@@ -1,0 +1,136 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+You can use either Jimmer's standard build method, or use plugins provided by the community.
+
+-   Method 1: Use Jimmer's standard build method
+
+    <Tabs groupId="buildTool">
+    <TabItem value="java_maven" label="Java (Maven)">
+
+    ```xml title="pom.xml"
+    ...other code omitted... 
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.10.1</version>
+                <configuration>
+                    <!-- highlight-next-line -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.babyfish.jimmer</groupId>
+                            <!-- highlight-next-line -->
+                            <artifactId>jimmer-apt</artifactId>
+                            <version>${jimmer.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    ...other code omitted...
+    ```
+
+    </TabItem>
+    <TabItem value="java_gradle" label="Java (Gradle)">
+
+    ```groovy
+    dependencies {
+
+        ...other dependencies omitted...
+
+        annotationProcessor "org.babyfish.jimmer:jimmer-apt:${jimmerVersion}" 
+    }
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin_gradle" label="Kotlin (Gradle.kts)">
+
+    ```kotlin
+    plugins {
+        // Add KSP plugin  
+        id("com.google.devtools.ksp") version "1.7.10-1.0.6"
+
+        ...other plugins omitted...
+    }
+
+    dependencies {
+
+        // Apply Jimmer's KSP code generator 
+        // highlight-next-line
+        ksp("org.babyfish.jimmer:jimmer-ksp:${jimmerVersion}")
+
+        ...other dependencies omitted...
+    }
+
+    // Add generated code to compile path.
+    // Gradle build works without this, but IntelliJ won't find generated code. 
+    kotlin {
+        sourceSets.main {
+          kotlin.srcDir("build/generated/ksp/main/kotlin") 
+        }
+    }
+    ```
+
+    </TabItem>
+    </Tabs>
+
+-   Method 2: Use plugins provided by the community
+
+    <details>
+    <summary>https://github.com/ArgonarioD/gradle-plugin-jimmer</summary>
+    <Tabs>
+    <TabItem value="java_gradle" label="Java (Gradle Plugin)">
+
+    ```groovy title="build.gradle"
+    plugins {
+        // Starting from Gradle 7.0, you can use "latest.release" instead of a specific version number to represent the use of the latest version.
+        // You can also use the '+' character to indicate matching the latest version number starting from the '+' character.
+        id "tech.argonariod.gradle-plugin-jimmer" version "latest.release"
+
+        ...other plugins omitted...
+    }
+
+    jimmer {
+        // Set the Jimmer dependency version, where you can also use version range expressions such as "latest.release" or "0.+"
+        version = "${jimmerVersion}"
+    }
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin_gradle" label="Kotlin (Gradle Plugin)">
+
+    ```kotlin title="build.gradle.kts"
+    plugins {
+        // Starting from Gradle 7.0, you can use "latest.release" instead of a specific version number to represent the use of the latest version.
+        id("tech.argonariod.gradle-plugin-jimmer") version "latest.release"
+        // You can also use the '+' character to indicate matching the latest version number starting from the '+' character.
+        // Add KSP plugin
+        id("com.google.devtools.ksp") version "1.7.10+"
+
+        ...other plugins omitted...
+    }
+
+    jimmer {
+        // Set the Jimmer dependency version, where you can also use version range expressions such as "latest.release" or "0.+"
+        version = "${jimmerVersion}"
+    }
+    ```
+
+    </TabItem>
+    </Tabs>
+    </details>
+
+    {/* TODO: Insert gradle plugin before this line */}
+
+:::note
+[KSP](https://kotlinlang.org/docs/ksp-overview.html) only supports gradle,
+It has been proven that KSP's third-party Maven plug-in support cannot keep up with the version 
+iteration of 'kotlin/KSP' itself, and often encounters many problems during the upgrade process.
+
+Eventually, Jimmer dropped Maven support for Kotlin and asked Kotlin developers to use Gradle.
+:::

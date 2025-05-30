@@ -1,0 +1,21 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import ImmutableStep from './immutable-step.mdx';
+
+In order to solve the inconvenience of secondary "modification" *(creating a new immutable object based on another immutable object)* of complex immutable objects in the current JVM ecosystem, some immutable object frameworks were born:
+
+-   [Immutables](https://immutables.github.io/immutable.html)
+-   [FreeBuilder](https://github.com/inferred/FreeBuilder) 
+-   [Arrow-Kt(Kotlin)](https://arrow-kt.io/learn/immutable-data/intro/)
+-   [Kopyk(Kotlin)](https://kopyk.at/)
+-   [MuteKt(Kotlin)](https://github.com/PatilShreyas/mutekt)
+
+Jimmer is an ORM framework, and handling deep data structures is a core issue for ORM, so Jimmer must do similar work.
+
+Jimmer needs to provide elegant dual language support for both Java and Kotlin at the same time. None of the above solutions can meet this requirement, so Jimmer did not use any of them, but chose to transplant [immer](https://github.com/immerjs/immer) from the JavaScript/TypeScript field.
+
+<ImmutableStep/>
+  
+This transplant is a powerful complement to the JVM ecosystem.
+
+This framework is named Jimmer, paying tribute to [immer](https://github.com/immerjs/immer).

@@ -1,0 +1,447 @@
+---
+sidebar_position: 2
+title: Query
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## 功能描述
+
+假如没有Jimmer的支持，实现GraphQL查询需要做两类工作
+
+-   查询聚合根对象
+
+    这是开发任何数据服务都需要做的工作，无论是GraphQL服务，REST服务，甚至其他自定义协议的服务。
+
+    开发人员只需查询并返回孤单的聚合根对象即可，无需考虑这些对象的关联属性。所以，这是相对简单的开发任务。
+    
+    对[Spring GraphQL](https://spring.io/projects/spring-graphql)而言，为控制器类的的查询方法添加注解`@QueryMapping`即可。
+
+-   查询关联属性和计算属性
+
+    这是实现GraphQL查询的主要工作量，需要考虑当前对象的所有关联，以及实施批量加载。存在一定的工作量。
+
+    其实，也可以换一种说法，正是应为服务端承担了这些责任，客户端使用起来才会感觉到自由、便捷和强大。
+
+    对[Spring GraphQL](https://spring.io/projects/spring-graphql)而言，提供了一些用于查询关联属性的方案，比如
+
+    -   [@SchemaMapping](https://docs.spring.io/spring-graphql/docs/current/reference/html/#controllers.schema-mapping)
+    -   [Batch Loading](https://docs.spring.io/spring-graphql/docs/current/reference/html/#execution.batching)
+    -   [@BatchMapping](https://docs.spring.io/spring-graphql/docs/current/reference/html/#controllers.batch-mapping)
+
+用Jimmer实现GraphQL查询时，开发人员只需关注于聚合根对象的查询，只需要保证这些聚合根对象具备简单标量字段即可。这是因为
+
+:::tip
+实体对象的所有关联属性和计算属性都会被Jimmer自动映射为GraphQL字段，无需任何开发
+:::
+
+:::caution
+截止到目前为止，GraphQL协议并不支持自关联属性的递归查询。
+
+因此，无法通过GraphQL暴露类似于[对象抓取器的递归查询](../query/object-fetcher/recursive)的功能，这是目前使用GraphQL必须接受的功能牺牲。
+:::
+
+## 实现GraphQL服务
+
+### 1. 最简实现
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="BookStoreService.java"
+package com.example.business;
+
+import org.springframework.graphql.data.method.annotation.Argument;
+// highlight-next-line
+import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.stereotype.Controller;
+
+...省略其他导入...
+
+@Controller
+public class BookStoreService {
+
+    private final JSqlClient sqlClient;
+
+    public BookStoreService(JSqlClient sqlClient) {
+        this.sqlClient = sqlClient;
+    }
+
+    // highlight-next-line
+    @QueryMapping
+    public List<BookStore> bookStores(
+            @Argument @Nullable String name
+    ) {
+        BookStoreTable table = Tables.BOOK_STORE_TABLE;
+        return sqlClient
+            .createQuery(table)
+            .where(table.name().ilikeIf(name))
+            .select(table)
+            .execute();
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="BookStoreService.kt"
+package com.example.business
+
+import org.springframework.graphql.data.method.annotation.Argument
+// highlight-next-line
+import org.springframework.graphql.data.method.annotation.QueryMapping
+import org.springframework.stereotype.Controller
+
+...省略其他导入...
+
+@Controller
+class BookStoreService(
+    private val sqlClient: KSqlClient
+) {
+
+    // highlight-next-line
+    @QueryMapping
+    fun bookStores(
+        @Argument name: String?
+    ): List<BookStore> =
+        sqlClient
+            .createQuery(BookStore::class) {
+                where(table.name `ilike?` name)
+                select(table)
+            }
+            .execute()
+}
+```
+
+</TabItem>
+</Tabs>
+
+和之前的REST服务不同，这个例子并**未**使用[对象抓取器](../query/object-fetcher)，返回最简单的孤单对象即可 *(孤单对象既不包含关联属性也不包含计算属性)*。
+
+虽然这里我们返回了孤单对象，但是如果客户端的GraphQL请求包含关联对象，Jimmer仍然会自动加载所需的关联属性。
+
+但是，这种写法存在一个问题：在非缓存模式下，不需要的属性也会被查询，这有性能问题，稍后我们将介绍另外一种具有优化能力的写法。
+
+### 2. 优化性能
+
+在非缓存模式下，为了不查询不需要非关联的属性，Jimmer可以根据`graphql.schema.DataFetchingEnvironment`创建`Fetcher`对象，以此Fetcher对对象作为参数查询数据库即可。
+
+:::tip
+非缓存模式下，不查询不需要的非关联属性，是Jimmer GraphQL相比Java生态中其他GraphQL实现的本质区别。
+:::
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="BookStoreService.java"
+package com.example.business;
+
+import org.springframework.graphql.data.method.annotation.Argument;
+// highlight-next-line
+import graphql.schema.DataFetchingEnvironment;
+// highlight-next-line
+import org.babyfish.jimmer.spring.graphql.DataFetchingEnvironments;
+import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.stereotype.Controller;
+
+...省略其他导入...
+
+@Controller
+public class BookStoreService {
+
+    private final JSqlClient sqlClient;
+
+    public BookStoreService(JSqlClient sqlClient) {
+        this.sqlClient = sqlClient;
+    }
+
+    @QueryMapping
+    public List<BookStore> bookStores(
+            @Argument @Nullable String name,
+            // highlight-next-line
+            DataFetchingEnvironment env
+    ) {
+        BookStoreTable table = Tables.BOOK_STORE_TABLE;
+        return sqlClient
+            .createQuery(table)
+            .where(table.name().ilikeIf(name))
+            .select(
+                table.fetch(
+                    // highlight-next-line
+                    DataFetchingEnvironments.createQuery(
+                        BookStore.class,
+                        env
+                    )
+                )
+            )
+            .execute();
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="BookStoreService.kt"
+package com.example.business
+
+import org.springframework.graphql.data.method.annotation.Argument
+// highlight-next-line
+import graphql.schema.DataFetchingEnvironment
+// highlight-next-line
+import org.babyfish.jimmer.spring.graphql.toFetcher
+import org.springframework.graphql.data.method.annotation.QueryMapping
+import org.springframework.stereotype.Controller
+
+...省略其他导入...
+
+@Controller
+class BookStoreService(
+    private val sqlClient: KSqlClient
+) {
+
+    @QueryMapping
+    fun bookStores(
+        @Argument name: String?,
+        // highlight-next-line
+        env: DataFetchingEnvironment
+    ): List<BookStore> =
+        sqlClient
+            .createQuery(BookStore::class) {
+                where(table.name `ilike?` name)
+                select(
+                    table.fetch(
+                        // highlight-next-line
+                        env.toFetcher()
+                    )
+                )
+            }
+            .execute()
+}
+```
+
+</TabItem>
+</Tabs>
+
+## 运行效果
+
+附带的例子中, GraphQL相关的项目在这里
+
+|Language|Example|
+|---|---|
+|Java|[jimmer-examples/java/jimmer-sql-graphql](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-sql-graphql)|
+|Kotlin|[jimmer-examples/kotlin/jimmer-sql-graphql-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-sql-graphql-kt)|
+
+选择任何一个项目，打开，启动。最后，使用浏览器访问http://localhost:8080/graphiql
+:::note
+小心，是/graph**i**ql, 不是/graphql
+:::
+
+执行请求
+
+```
+query {
+  bookStores {
+    id
+    name
+    avgPrice ❶
+    books { ❷
+      id
+      name
+      edition
+      price
+      authors { ❸
+        id
+        firstName
+        fullName
+        gender
+      }
+    }
+  }
+}
+```
+
+-   ❶ 查询计算属性`BookStore.avgPrice`
+
+-   ❷ 查询关联属性`BookStore.books`
+
+-   ❸ 查询关联属性`Book.authors`
+
+返回结果为
+
+```json
+{
+    "data":{
+        "bookStores":[
+            {
+                "id":2,
+                "name":"MANNING",
+                // highlight-next-line
+                "avgPrice":80.333333,
+                // highlight-next-line
+                "books":[
+                    {
+                        "id":10,
+                        "name":"GraphQL in Action",
+                        "edition":1,
+                        "price":80,
+                        // highlight-next-line
+                        "authors":[
+                            {
+                                "id":5,
+                                "firstName":"Samer",
+                                "fullName":"Samer Buna",
+                                "gender":"MALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":11,
+                        ...略...
+                    },
+                    {
+                        "id":12,
+                        ...略...
+                    }
+                ]
+            },
+            {
+                "id":1,
+                "name":"O'REILLY",
+                // highlight-next-line
+                "avgPrice":58.5,
+                // highlight-next-line
+                "books":[
+                    {
+                        "id":4,
+                        "name":"Effective TypeScript",
+                        "edition":1,
+                        "price":73,
+                        // highlight-next-line
+                        "authors":[
+                            {
+                                "id":3,
+                                "firstName":"Dan",
+                                "fullName":"Dan Vanderkam",
+                                "gender":"MALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":5,
+                        ...略...
+                    },
+                    {
+                        "id":6,
+                        ...略...
+                    },
+                    {
+                        "id":1,
+                        "name":"Learning GraphQL",
+                        "edition":1,
+                        "price":50,
+                        "authors":[
+                            {
+                                "id":2,
+                                "firstName":"Alex",
+                                "fullName":"Alex Banks",
+                                "gender":"MALE"
+                            },
+                            {
+                                "id":1,
+                                "firstName":"Eve",
+                                "fullName":"Eve Procello",
+                                "gender":"FEMALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":2,
+                        "name":"Learning GraphQL",
+                        "edition":2,
+                        "price":55,
+                        "authors":[
+                            {
+                                "id":2,
+                                "firstName":"Alex",
+                                "fullName":"Alex Banks",
+                                "gender":"MALE"
+                            },
+                            {
+                                "id":1,
+                                "firstName":"Eve",
+                                "fullName":"Eve Procello",
+                                "gender":"FEMALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":3,
+                        "name":"Learning GraphQL",
+                        "edition":3,
+                        "price":51,
+                        "authors":[
+                            {
+                                "id":2,
+                                "firstName":"Alex",
+                                "fullName":"Alex Banks",
+                                "gender":"MALE"
+                            },
+                            {
+                                "id":1,
+                                "firstName":"Eve",
+                                "fullName":"Eve Procello",
+                                "gender":"FEMALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":7,
+                        "name":"Programming TypeScript",
+                        "edition":1,
+                        "price":47.5,
+                        "authors":[
+                            {
+                                "id":4,
+                                "firstName":"Boris",
+                                "fullName":"Boris Cherny",
+                                "gender":"MALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":8,
+                        "name":"Programming TypeScript",
+                        "edition":2,
+                        "price":45,
+                        "authors":[
+                            {
+                                "id":4,
+                                "firstName":"Boris",
+                                "fullName":"Boris Cherny",
+                                "gender":"MALE"
+                            }
+                        ]
+                    },
+                    {
+                        "id":9,
+                        "name":"Programming TypeScript",
+                        "edition":3,
+                        "price":48,
+                        "authors":[
+                            {
+                                "id":4,
+                                "firstName":"Boris",
+                                "fullName":"Boris Cherny",
+                                "gender":"MALE"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+```

@@ -1,0 +1,243 @@
+---
+sidebar_position: 5
+title: 隐式子查询
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+集合 *(一对多或多对多)* 关联往往导致需要在查询中高频使用子查询，隐式子查询对这类子查询给予了极大的简化。
+
+> 至于完整的普通子查询，请参见[普通子查询](./sub-query)
+
+## Jimmer为集合关联生成DSL的代码
+
+以多对多关联`Book.authors`为例，经过编译，Jimmer会生成如下代码
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="BookTable.java"
+@GeneratedBy(type = Book.class)
+public class BookTable extends AbstractTypedTable<Book> implements BookProps {
+
+    @Override
+    // highlight-next-line
+    public Predicate authors(Function<AuthorTableEx, Predicate> block) {
+        ...省略实现逻辑...
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+// highlight-next-line
+fun KProps<Book>.authors(
+    block: KNonNullTableEx<Author>.() -> KNonNullExpression<Boolean>?
+): KNonNullExpression<Boolean>? = ...省略实现逻辑...
+```
+
+</TabItem>
+</Tabs>
+
+用户可以基于此`authors`方法构建隐含子查询。
+
+此方法的参数是lambda表达式，其参数为关联对象的表对象，用户返回一个过滤此关联对象的SQL条件即可。
+
+## 示范
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+BookTable table = Tables.BOOK_TABLE;
+
+public List<Book> findBooks(@Nullable String authorName) {
+    return sqlClient
+        .createQuery(table)
+        .whereIf(
+                authorName != null && !authorName.isEmpty(),
+                // highlight-next-line
+                table.authors(author -> {
+                    return Predicate.or(
+                            author.firstName().ilike(authorName),
+                            author.lastName().ilike(authorName)
+                    );
+                })
+        )
+        .select(table)
+        .execute();
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+fun findBooks(authorName: String?): List<BookStore> =
+    sqlClient.createQuery(Book::class) {
+        authorName?.takeIf { it.isNotEmpty() }?.let {
+            // highlight-next-line
+            where += table.authors {
+                or(
+                    firstName ilike it,
+                    lastName ilike it
+                )
+            }
+        }
+    }.execute()
+```
+
+</TabItem>
+</Tabs>
+
+调用上面的方法，并指定参数为非null，比如`findBooks("alex")`，生成的SQL如下
+
+```csharp
+select
+    tb_1_.ID,
+    tb_1_.CREATED_TIME,
+    tb_1_.MODIFIED_TIME,
+    tb_1_.TENANT,
+    tb_1_.NAME,
+    tb_1_.EDITION,
+    tb_1_.PRICE,
+    tb_1_.STORE_ID
+from BOOK tb_1_
+where
+    exists( ➊
+        select
+            1
+        from AUTHOR tb_2_
+        inner join BOOK_AUTHOR_MAPPING tb_3_
+            on tb_2_.ID = tb_3_.AUTHOR_ID
+        where
+                tb_3_.BOOK_ID = tb_1_.ID ➋
+            and
+                (
+                    lower(tb_2_.FIRST_NAME) like ? /* %alex% */ ➌
+                or
+                    lower(tb_2_.LAST_NAME) like ? /* %alex% */ ➍
+                )
+    )
+```
+
+-   ➊ 隐含子查询总是采用`exists`
+
+-   ➋ Jimmer自动生成的SQL条件，用于关联父子查询
+
+-   ➌ ➍ 用户指定的条件，用于过滤关联对象
+
+:::tip
+父子查询的关联条件被自动生成，用户只需要指定关联对象过滤条件，这是隐含子查询和[普通子查询](./sub-query)的本质区别。
+:::
+
+## 自动合并
+
+和[动态JOIN的自动合并](dynamic-join/merge)类似，针对相同关联多个隐含子查询也可以被自动合并。
+
+:::caution
+隐含子查询的合并规则并没有动态JOIN那么通用，仅限于同一个and, or或not内部
+:::
+
+例如
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+BookTable table = Tables.BOOK_TABLE;
+
+public List<Book> findBooks(
+    @Nullable String authorName, 
+    @Nullable Gender authorGender
+) {
+    return sqlClient
+        .createQuery(table)
+        .whereIf(
+            authorName != null && !authorName.isEmpty(),
+            // highlight-next-line
+            table.authors(author -> {
+                return Predicate.or(
+                        author.firstName().ilike(authorName),
+                        author.lastName().ilike(authorName)
+                );
+            })
+        )
+        .whereIf(
+            authorGender != null,
+            // highlight-next-line
+            table.authors(author -> author.gender().eq(authorGender))
+        )
+        .select(table)
+        .execute();
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+fun findBooks(authorName: String?): List<BookStore> =
+    sqlClient.createQuery(Book::class) {
+        authorName?.takeIf { it.isNotEmpty() }?.let {
+            // highlight-next-line
+            where += table.authors {
+                or(
+                    firstName ilike it,
+                    lastName ilike it
+                )
+            }
+        }
+        authorGender?.let {
+            // highlight-next-line
+            where += table.authors {
+                gender like it
+            }
+        }
+    }.execute()
+```
+
+</TabItem>
+</Tabs>
+
+上面的例子采用了两个隐含子查询。
+
+然而，当我们把两个参数都指定成非null时，比如*findBooks("alex", Gender.MALE)`，*最终SQL中只会出现一个子查询，如下
+
+```csharp
+select
+    tb_1_.ID,
+    tb_1_.CREATED_TIME,
+    tb_1_.MODIFIED_TIME,
+    tb_1_.TENANT,
+    tb_1_.NAME,
+    tb_1_.EDITION,
+    tb_1_.PRICE,
+    tb_1_.STORE_ID
+from BOOK tb_1_
+where
+    // Merge two implicit subqueries to one real sub query
+    // highlight-next-line
+    exists(
+        select
+            1
+        from AUTHOR tb_2_
+        inner join BOOK_AUTHOR_MAPPING tb_3_
+            on tb_2_.ID = tb_3_.AUTHOR_ID
+        where
+                tb_3_.BOOK_ID = tb_1_.ID
+            and
+                (
+                    lower(tb_2_.FIRST_NAME) like ? /* %alex% */
+                or
+                    lower(tb_2_.LAST_NAME) like ? /* %alex% */
+                )
+            and
+                tb_2_.GENDER = ? /* M */
+    )
+```
+
+这是因为同一个and, or或not内部，针对相同关联的多个隐式子查询会被自动合并。

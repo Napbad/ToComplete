@@ -1,0 +1,39 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+Book book = Immutables.createBook(draft -> {
+    draft.setName("SQL in Action");
+    draft.setEdition(1);
+});
+// highlight-next-line
+System.out.println(book.price());
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+val book = Book {
+    name = "SQL in Action"
+    edition = 1
+}
+// highlight-next-line
+println(book.price)
+```
+
+</TabItem>
+</Tabs>
+
+Here, the Book object has `name` and `edition` properties, 
+but the highlighted code attempts to access the non-existent `price` property, 
+which will lead to the following exception:
+
+```
+Exception in thread "main" org.babyfish.jimmer.UnloadedException: The property "yourpackage.Book.price" is unloaded
+	at yourpackage.BookDraft$Producer$Impl.price(BookDraft.java:285)
+	at yourpackage.App.main(App.java:10)
+```

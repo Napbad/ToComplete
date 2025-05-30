@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: tocomplete_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: tocomplete123
+      MYSQL_DATABASE: tocomplete
+      MYSQL_USER: tocomplete
+      MYSQL_PASSWORD: tocomplete123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - tocomplete_network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: tocomplete_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - tocomplete_network
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tocomplete_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=tocomplete
+      - DB_USERNAME=tocomplete
+      - DB_PASSWORD=tocomplete123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - backend_logs:/app/logs
+    networks:
+      - tocomplete_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web前端
+  frontend:
+    build:
+      context: ./frontend/web/tocomplete-web
+      dockerfile: Dockerfile
+    container_name: tocomplete_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    networks:
+      - tocomplete_network
+
+  # Nginx负载均衡器 (可选)
+  nginx:
+    image: nginx:alpine
+    container_name: tocomplete_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx-lb.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+    networks:
+      - tocomplete_network
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_logs:
+    driver: local
+
+networks:
+  tocomplete_network:
+    driver: bridge 

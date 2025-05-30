@@ -1,0 +1,73 @@
+---
+sidebar_position: 1
+title: Welcome ✦
+---
+
+Here's the English translation of the provided Markdown file:
+
+## Getting Started Notes
+
+Jimmer is an ORM framework that uses precompilation technology, with most of its magic coming from compile time rather than runtime. Therefore, precompilation is required:
+
+- For Java, this means APT, [Annotation Processor Tool](https://www.jetbrains.com/help/idea/annotation-processors-support.html)
+
+- For Kotlin, this means KSP, [Kotlin Symbol Processing](https://kotlinlang.org/docs/ksp-overview.html)
+
+For readers with no experience with JVM precompilation frameworks, the project's build approach may be unfamiliar. Instead of directly writing code, it's recommended to first run the simplest official example:
+
+- Java: [jimmer-examples/java/jimmer-simple](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-simple)
+
+- Kotlin: [jimmer-examples/kotlin/jimmer-simpl-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-simple-kt)
+
+By successfully running these simple examples, readers will quickly become familiar with the build process for this type of project:
+
+- No environment setup is required, as the project uses an H2 in-memory database and automatically creates data on startup
+
+- If you open the project in an IDE before the first compilation, you may find some types are undefined because these types are automatically generated after precompilation. Please ignore the related errors and directly click the IDE's Run button - the errors will disappear automatically
+
+- Using the community-contributed [Jimmer-Buddy](https://github.com/Enaium/JimmerBuddy) plugin can improve the development experience during the precompilation process
+
+## Where are the examples and quick start guides?
+
+When facing a new framework, developers' first reaction is to ask where the examples and quick start guides are:
+
+- Included examples: [Official Examples](https://github.com/babyfish-ct/jimmer-examples)
+
+- Quick start: [Get Started](../quick-view/get-started/)
+
+## About This Documentation
+
+The chapters of this documentation are divided into two types:
+
+- Tutorial chapters marked with a ★ symbol.
+
+    1.  [Introduction/Overview](./introduction)
+
+        The most important article, marked with a ✦ symbol.
+        
+        It discusses Jimmer's innovations, introduces all its features, and provides rich, concise demonstrations.
+
+    2.  [Quick Preview](../quick-view/)
+
+        A quick preview of Jimmer's three most basic introductory features:
+        1. Querying any shape
+        2. Saving any shape
+        3. Arbitrary dynamic queries.
+
+        > This chapter only includes these 3 core capabilities and does not cover other advanced features.
+
+    3.  [Showcase](../showcase)
+
+        For any framework, some features can be demonstrated with code and do not require extensive explanations to aid understanding.
+
+        All such features that can be easily demonstrated with code and do not require much explanation are listed in this chapter.
+
+- Other chapters.
+
+    The remaining chapters should be treated as reference books, not tutorials.
+    
+    These chapters delve into the details of various features, including advanced ones.
+
+## Discussion
+
+Welcome to join the Jimmer community, Discord Link: https://discord.gg/PmgR5mpY3E

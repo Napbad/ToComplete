@@ -1,0 +1,517 @@
+---
+sidebar_position: 1
+title: Basic Usage
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { LongAssociation } from '@site/src/components/LongAssociation';
+import Grid from '@mui/material/Grid';
+import {SaveCommandPanel} from '@site/src/components/HomepageFeatures/SaveCommand';
+
+## Introduction
+
+<SaveCommandPanel/>
+
+## 1. Flexibility of Single Entity Objects
+
+### 1.1. Flexible Control Over Simple Property Modifications
+
+Let's look at how Jimmer distinguishes between the following two requirements:
+
+1. Not updating a certain property of an object
+
+2. Updating a property of an object to null
+
+For traditional static language ORMs, this is a very tricky problem. However, Jimmer can easily distinguish between these two different behaviors.
+
+#### 1.1.1. Not Updating a Certain Property
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+sqlClient.update(
+    Immutables.createBook(draft -> {
+        draft.setId(8L);
+        draft.setPrice(new BigDecimal("33.9"));
+        // highlight-next-line
+        // `store` or `storeId` property not specified
+    })
+);
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+sqlClient.update(
+    Book {
+        id = 8L
+        price = BigDecimal("33.9")
+        // highlight-next-line
+        // `store` or `storeId` property not specified
+    }
+);
+```
+
+</TabItem>
+</Tabs>
+
+Generates the following SQL:
+
+```csharp
+update BOOK
+set
+    PRICE = ? /* 33.9 */
+where
+    ID = ? /* 8 */
+```
+
+As you can see, only the specified field `PRICE` is modified, while other unspecified fields *(including `STORE_ID`)* remain unchanged.
+
+#### 1.1.2. Updating a Property to Null
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+sqlClient.update(
+    Immutables.createBook(draft -> {
+        draft.setId(8L);
+        draft.setPrice(BigDecimal("33.9"))
+        // highlight-next-line
+        draft.setStore(null);
+        // Can also be written as `draft.setStoreId(null)`
+    })
+);
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+sqlClient.update(
+    Book {
+        id = 8L
+        price = BigDecimal("33.9")
+        // highlight-next-line
+        store = null
+        // Can also be written as `storeId = null`
+    }
+);
+```
+
+</TabItem>
+</Tabs>
+
+Generates the following SQL:
+
+```csharp
+update BOOK
+set
+    PRICE = ? /* 33.9 */
+    /* highlight-next-line */
+    STORE_ID = ? /* <null: long> */
+where
+    ID = ? /* 8 */
+```
+
+### 1.2. Using Incomplete Objects to Avoid Query-Before-Update
+
+In real business projects, there's often a requirement to update only some properties of an entity, not all of them.
+
+However, in traditional ORM development patterns, developers rarely use ORM update statements for convenience. Instead, they often choose to query the object first, then modify it, and finally save it. Here's a JPA example:
+
+```java title="JPA Example"
+EntityManager entityManager = ...obtain JPA session object from current transaction context, omitted...
+Book book = entityManager.find(Book.class, 8L);
+
+book.setStore(null); // In JPA, entities are mutable, setting association to null
+
+// Calling merge here is just for clarity, it can be omitted since JPA will modify the database when the transaction commits
+entityManager.merge(book);
+```
+
+Actually, besides wanting to modify `Book.store` to null, this scenario has no interest in other properties of the object.
+
+Obviously, this is wasteful. If the entity object has many properties, it becomes even more apparent.
+
+Jimmer's entity objects don't require all properties to be specified, meaning Jimmer supports incomplete objects.
+
+Therefore, you can **create from scratch** an incomplete Book object, only specifying its `id` property and `store` property, and let Jimmer update it directly.
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+sqlClient.update(
+    Immutables.createBook(draft -> {
+        draft.setId(8L);
+        draft.setStore(null);
+    })
+);
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+sqlClient.update(
+    Book {
+        id = 8L
+        store = null
+    }
+);
+```
+
+</TabItem>
+</Tabs>
+
+Generates the following SQL:
+
+```csharp
+update BOOK
+set
+    STORE_ID = ? /* <null: long> */
+where
+    ID = ? /* 8 */
+```
+
+## 2. Flexibility of Association Properties
+
+Through the single object case, we have gained a basic understanding of the flexibility of save commands.
+
+Next, let's introduce the control capabilities of save commands over association properties.
+
+### 2.1. Whether to Cascade Save Associated Properties
+
+In most ORMs, the `cascade` configuration of association properties determines whether to save associated objects when saving an object.
+
+Taking JPA as an example, this can be achieved through 4 configurations:
+
+- [OneToOne.cascade](https://docs.oracle.com/javaee/7/api/javax/persistence/OneToOne.html#cascade--)
+- [ManyToOne.cascade](https://docs.oracle.com/javaee/7/api/javax/persistence/ManyToOne.html#cascade--)
+- [OneToMany.cascade](https://docs.oracle.com/javaee/7/api/javax/persistence/OneToMany.html#cascade--)
+- [ManyToMany.cascade](https://docs.oracle.com/javaee/7/api/javax/persistence/ManyToMany.html#cascade--)
+
+However, deciding on these configurations is painful. No matter how they are configured, they solidify the behavioral patterns of the model at the entity modeling stage, making the entity design too tightly coupled with business requirements.
+
+Jimmer doesn't have similar configurations. The specific behavior depends on the format of the data structure being saved itself. For example:
+
+- Only saving the `BookStore` object
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java
+    BookStore store = Immutables.createBookStore(draft -> {
+        draft.setName("AMAZON");
+        draft.setWebsite("https://www.amazon.com");
+    });
+    sqlClient.save(store);
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin
+    val store = BookStore {
+        name = "AMAZON"
+        website = "https://www.amazon.com"
+    }
+    sqlCient.save(store)
+    ```
+
+    </TabItem>
+    </Tabs>
+
+- Saving the `BookStore` object while cascading to save related `Book` objects
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java
+    BookStore store = Immutables.createBookStore(draft -> {
+        draft.setName("AMAZON");
+        draft.setWebsite("https://www.amazon.com");
+        // highlight-next-line
+        draft.addIntoBooks(book -> {
+            book.setName("C++ Primer");
+            book.setEdition(5);
+            book.setPrice(new BigDecimal("44.02"));
+        });
+        // highlight-next-line
+        draft.addIntoBooks(book -> {
+            book.setName("Programming RUST");
+            book.setEdition(1);
+            book.setPrice(new BigDecimal("71.99"));
+        });
+    });
+
+    sqlClient.save(store);
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin
+    val store = BookStore {
+        name = "AMAZON"
+        website = "https://www.amazon.com"
+        // highlight-next-line
+        books().addBy {
+            name = "C++ Primer"
+            edition = 5
+            price = BigDecimal("44.02")
+        }
+        // highlight-next-line
+        books().addBy {
+            name = "Programming RUST"
+            edition = 1
+            price = BigDecimal("71.99")
+        }
+    }
+
+    sqlCient.save(store)
+    ```
+
+    </TabItem>
+    </Tabs>
+
+### 2.2. Symmetry of Bidirectional Associations
+
+ORM has an important concept: bidirectional associations. In this tutorial, `Book.authors` and `Author.books` are bidirectional associations of each other.
+
+Whether in JPA or Jimmer, both ends of a bidirectional association are divided into active and passive sides:
+
+- Active side: The `mappedBy` property of the association annotation is not specified
+- Passive side: The `mappedBy` property of the association annotation is specified
+
+However, there is a huge difference between Jimmer and JPA:
+
+- In JPA, you must make the active side object act as the parent object and the passive side object act as the associated object. Otherwise, modifications will be ineffective.
+
+    Choosing the active side for JPA bidirectional associations is also very painful, essentially solidifying the model's behavior pattern at the entity modeling stage, making entity design too tightly coupled with business requirements.
+
+- In Jimmer, regardless of how you choose the active and passive sides, it has no impact on save commands.
+
+    - If the active side choice of bidirectional association is restricted by Jimmer *(for example, when building bidirectional associations based on one-to-many and many-to-one associations, Jimmer requires the one-to-many association to be the passive side)*, define the bidirectional association according to Jimmer's requirements
+    - Otherwise, freely define bidirectional associations according to your preferences
+
+In Jimmer, you can freely manipulate bidirectional associations according to your preferences, for example:
+
+- Saving a `Book` object and modifying its association with `Author`, i.e., implementing association modification through `Book.authors`
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java
+    Book book = Immutables.createBook(draft -> {
+        draft.setName("C++ Primer");
+        draft.setEdition(5);
+        draft.setPrice(new BigDecimal("44.02"));
+        draft.addIntoAuthors(author -> author.setId(10L));
+        draft.addIntoAuthors(author -> author.setId(11L));
+        draft.addIntoAuthors(author -> author.setId(12L));
+    })
+
+    sqlCient.save(book);
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin
+    val book = Book {
+        name = "C++ Primer"
+        edition = 5
+        price = BigDecimal("44.02")
+        authors().addBy { id = 10L }
+        authors().addBy { id = 11L }
+        authors().addBy { id = 12L }
+    }
+
+    sqlCient.save(book);
+    ```
+
+    </TabItem>
+    </Tabs>
+
+- Saving an `Author` object and modifying its association with `Book`, i.e., implementing association modification through `Author.books`
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java
+    Author author = Immutables.createAuthor(draft -> {
+        draft.setFirstName("Stanley");
+        draft.setLastName("Lippman");
+        draft.setGender(Gender.MALE);
+        draft.addIntoBooks(book -> book.setId(40L));
+        draft.addIntoBooks(book -> book.setId(41L));
+        draft.addIntoBooks(book -> book.setId(42L));
+        draft.addIntoBooks(book -> book.setId(43L));
+        draft.addIntoBooks(book -> book.setId(44L));
+        draft.addIntoBooks(book -> book.setId(45L));
+    });
+
+    sqlClient.save(author);
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin
+    val author = Author { 
+        firstName = "Stanley"
+        lastName = "Lippman"
+        gender = Gender.MALE
+        books().addBy { id = 40L }
+        books().addBy { id = 41 }
+        books().addBy { id = 42L }
+        books().addBy { id = 43L }
+        books().addBy { id = 44L }
+        books().addBy { id = 45L }
+    }
+    
+    sqlCient.save(author)
+    ```
+
+    </TabItem>
+    </Tabs>
+
+## 3. Deciding Functionality Complexity
+
+Save commands are very flexible and can manifest as either very powerful advanced features or very simple basic features. It's all up to you.
+
+In daily project development, there are two distinctly different requirements:
+
+- Full data replacement for complex forms
+
+- Incremental modification for simple data
+
+In terms of development task complexity, one is very complex, and the other is very simple. However, Jimmer treats them equally and implements them quickly.
+
+### 3.1. Full Data Replacement for Complex Forms
+
+Complex forms usually include associations *(such as orders and order details)*, and may even include recursive data structures *(such as UI drag-and-drop systems, UML drawing tools)*.
+
+No matter how complex, viewing this data structure as a whole, it can be saved with a single command.
+
+To make the example representative, we'll use [Input DTO](./input-dto) that hasn't been explained yet. Although the related content hasn't been covered yet, readers can guess its purpose.
+
+Using Jimmer's DTO language, define a type called `BookStoreInput`.
+
+```title = "BookStore.dto"
+export com.yourcompany.yourproject.BookStore
+    -> pacage com.yourcompany.yourproject.dto;
+
+input BookStoreInput {
+    #allScalars
+    books {
+        #allScalars
+        id(authors) as authorIds
+    }
+}
+```
+
+After Jimmer compilation, a Java or Kotlin class named `BookStoreInput` is automatically generated.
+
+`BookStoreInput` is similar to POJO, a highly static type used to regulate, restrict, and accept client HTTP request content.
+
+At the same time, this class can automatically transform into `BookStore` entity objects and related associated objects.
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+@PutMapping("/store")
+public void saveBookStore(
+    @RequestBody BookStoreInput input
+) {
+    sqlCient.save(input);
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+@PutMapping("/store")
+fun saveBookStore(
+    @RequestBody input: BookStoreInput
+) {
+    sqlCient.save(input);
+}
+```
+
+</TabItem>
+</Tabs>
+
+Here, `sqlClient.save(input)` first converts the input DTO to `BookStore` entity objects and related associated objects, then directly saves the entire data structure, completing the full replacement of complex form data.
+
+The save command recursively processes objects at all levels in the entire data structure, comparing the data structure being saved with the existing data structure in the database, finding inconsistencies and making modifications.
+
+However, no matter how complex the internal details of this process are, it's transparent to users.
+
+### 3.2. Incremental Modification for Simple Data
+
+Now, let's implement a very simple requirement: adding a book to a bookstore.
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java
+@PutMapping("/store/{storeId}/books/{bookId}")
+public void addBook(
+    @PathVariable long storeId,
+    @PathVariable long bookId
+) {
+    sqlClient.update(
+        Immutables.createBook(
+            draft.setId(bookId);
+            draft.setStoreId(storeId);
+        )
+    )
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin
+@PutMapping("/store/{storeId}/books/{bookId}")
+fun addBook(
+    @PathVariable storeId: Long,
+    @PathVariable bookId: Long
+) {
+    sqlClient.update(
+        Book {
+            id = bookId
+            storeId = storeId
+        }
+    )
+}
+```
+
+</TabItem>
+</Tabs>
+
+This is a very simple example, while the previous example was completely different, completing very complex work.
+
+:::info
+Save commands can manifest as either very powerful advanced features or very simple basic features. Everything is possible, depending entirely on how you use them.
+:::
+
+## Security
+
+Save commands bring absolute flexibility to data saving operations, however, overly powerful flexibility often means compromising security.
+
+That is, the client can freely write arbitrary complex data structures to the server, even if this far exceeds its permission scope.
+
+For this, Jimmer adopts a divide-and-conquer approach:
+
+- The save command itself serves as underlying support, accepting Jimmer's dynamic entities, providing absolute flexibility and unlimited possibilities.
+
+- Introducing [InputDTO](./input-dto), automatically generating static types similar to POJO, standardizing and limiting client behavior, and being responsible for accepting request data. Finally, it automatically transforms into an entity object tree, handled by the save command.

@@ -1,0 +1,589 @@
+---
+sidebar_position: 3
+title: Overview ✦
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+import { ViewMore } from '@site/src/components/ViewMore';
+import { DtoExplosion, ObjectCache, AssociationCache, CalculatedCache, MultiViewCache } from '@site/src/components/Image';
+import { ShortAssociation } from '@site/src/components/ShortAssociation';
+import { LongAssociation } from '@site/src/components/LongAssociation';
+import { ObjectFetcherPanel } from '@site/src/components/HomepageFeatures/ObjectFetcher';
+import { CommunicationPanel } from '@site/src/components/HomepageFeatures/Communication';
+import { SaveCommandPanel } from '@site/src/components/HomepageFeatures/SaveCommand';
+import { CacheConsistencyPanel } from '@site/src/components/HomepageFeatures/CacheConsistency';
+import JPA from './_cmp/jpa.md';
+import ActiveRecord from './_cmp/active-record.md';
+import MyBatis from './_cmp/mybatis.md';
+import DynamicShape from '../_shared/dynamic-shape.mdx';
+import ImmutableStep from '../_shared/immutable-step.mdx';
+import Entity from './_entity.mdx';
+import Unloaded from './_unloaded.mdx';
+import DTO from './_dto.mdx'; 
+import SaveAlone from './_save/alone.mdx';
+import FetchPartial from '../_shared/fetch/partial.mdx';
+import FetchAssociation from '../_shared/fetch/association.mdx';
+import FetchRecursion from '../_shared/fetch/recursion.mdx';
+import SaveShortAssociation from './_save/short-association.mdx';
+import SaveLongAssociation from './_save/long-association.mdx';
+import SaveRecursiveTree from './_save/recursion.mdx';
+import DynamicWhere from './_dsl/dynamic-where.mdx';
+import DynamicJoin from './_dsl/dynamic-join.mdx';
+import ImplicitSubquery from './_dsl/implicit-subquery.mdx';
+import SuperQBE from './_dsl/super-qbe.mdx';
+
+Here's the English translation of the provided Markdown file:
+
+## 1. What is Jimmer?
+
+Jimmer is the most advanced ORM in the JVM, supporting both Java and Kotlin
+
+-   ORM core
+
+    -   All read and write related APIs are designed for operating on arbitrarily complex data structures, not just simple objects
+
+        -   Entity objects can be incomplete, meaning any read or write operation can target only specific properties of an object, not all properties
+        -   Directly read and write arbitrarily complex data structures, with the hierarchy and shape of the data structure freely specified by the specific business scenario, without requiring unified design upfront
+
+    -   Designed for batch operations
+
+        -   Query functionality has no `N + 1` problems, even if entity objects have user-defined complex business calculation properties
+        -   Fully leverages the underlying data batch modification capabilities, with objects at each layer of the saved data structure using JDBC batch operations
+        -   Fully utilizes the underlying database's upsert capabilities, avoiding select statements in complex batch modifications whenever possible, and if not possible, clearly explaining why to the user
+        -   Even when performing complex batch modifications, detailed investigation and translation of common database constraint errors is provided, making direct handling of database constraint exceptions by business projects a thing of the past
+
+    -   Strong type DSL support
+
+        -   Strong type DSL doesn't conflict with using database-specific capabilities; you can still use features specific to particular database products
+        -   Designed for arbitrarily complex multi-table dynamic queries, changing the industry status quo where most dynamic query solutions only target single-table operations
+        -   Intelligently optimizes generated SQL
+        -   Not just for generating SQL, but to go beyond Native SQL, providing more convenient capabilities
+
+-   Based on this ORM, a comprehensive solution has been built, including
+
+    -   DTO language, which solves the problem of business models and data models not being completely consistent in most cases at an extremely low cost
+    -   More comprehensive and powerful caching mechanisms, and highly automated cache consistency
+    -   More powerful client documentation and code generation capabilities, including Jimmer's original remote exceptions
+    -   Rapid creation of GraphQL services
+    -   Remote entity associations across microservices
+
+>   Currently not completed, but features that will be supported in `1.0.0`
+> 
+>   1. Support for subqueries as base tables in `from` or `join`
+>   2. Support for more powerful non-object query APIs
+>   3. Support for inheritance and polymorphism in entity models
+>   4. Support for foreign keys referencing non-id properties
+
+## 2. A new ORM, why?
+
+### Existing Pain Points
+
+In the current technology ecosystem, the technology system for accessing relational databases has significant flaws. Please see the image below.
+
+![mirror](@site/static/img/cmp.svg)
+
+1.  Static language ORM represented by JPA <ViewMore buttonText="Brief description" title="Advantages and disadvantages of JPA"><JPA/></ViewMore>
+
+2.  Dynamic language ORM represented by ActiveRecord *(Ruby)* <ViewMore buttonText="Brief description" title="Advantages and disadvantages of ActiveRecord(Ruby)"><ActiveRecord/></ViewMore>
+    
+3.  Lightweight SQL Builder/Mapper represented by MyBatis <ViewMore buttonText="Brief description" title="Advantages and disadvantages of MyBatis"><MyBatis/></ViewMore>
+
+### Root Cause
+
+In the above, we have discussed three common solutions in the RDBMS accessing field, but no matter which one we choose, we cannot achieve convenience, flexibility, and code safety simultaneously. Why is this the case?
+
+:::info
+For the JVM ecosystem, POJO *(like structure of other language)* is the root cause of this problem.
+
+POJO lacks the necessary flexibility and expressiveness, yet it is used as the data model and core by almost all JVM frameworks, severely limiting technical innovation in the JVM ecosystem.
+:::
+
+Therefore, in Jimmer, ORM entity objects are not POJOs. Instead, they are a unique universal data object *(to be introduced later)*, and this unique entity object underpins all of Jimmer's major innovations, serving as the foundation for the entire framework.
+
+:::note
+In fact, Jimmer entity objects can not only be applied in the ORM field but can also be used in almost any scenario where structured data maintenance is the purpose, enhancing the expressiveness of various technology stacks.
+
+Currently, Jimmer entities are only used in relational database access due to limited resources.
+:::
+
+## 3. Complete Functionality
+
+At the beginning of this document, we mentioned that the revolutionary ORM is only a part of Jimmer, and Jimmer's actual capabilities have already exceeded that of a mere ORM.
+
+Now, we present an overview of Jimmer's functionality and explain each part.
+
+![mirror](@site/static/img/jimmer.svg)
+
+### 3.1. Business Model
+
+In information systems, there are two types of objects:
+
+-   Entities: Entity objects are globally unified, with rich associations between objects.
+
+    Entity objects are often very close to the database and have extremely high stability.
+
+-   DTO: Input/output objects for specific business scenarios, usually a local fragment torn from the global entity relationship network, and the size and shape of this fragment are very flexible.
+
+    The number of DTO types is enormous, and each business interface has unique requirements for the format of DTO objects, which may be similar but different, exhibiting a clear <ViewMore buttonText="DTO explosion problem"><DtoExplosion/></ViewMore>. Additionally, they are easily affected by changing requirements and are unstable.
+
+:::tip
+Entity types are the globally unified data storage model, less affected by changing requirements, relatively stable, and considered high-value types.
+
+DTO types, as the input/output for each business scenario, are relatively arbitrary, easily affected by changing requirements, and considered low-value types.
+
+Jimmer advocates that developers should concentrate their efforts on designing the high-value entity model; sometimes DTOs are not needed, and sometimes they are. Even when needed, they can be automatically generated in an extremely inexpensive way. Therefore, projects built on Jimmer have excellent resistance to changing requirements.
+:::
+
+#### 3.1.1. Jimmer Entity
+
+Jimmer entity definitions are very similar to JPA entities. <ViewMore buttonText="See a quick demonstration" title="Entity Definition"><Entity/></ViewMore>
+
+As discussed earlier, Jimmer entities are not POJOs, so they are declared as `interface` instead of `class`.
+
+Then, who is responsible for implementing this interface? It's the `Jimmer Precompiler` in the diagram above *(for Java, it's [APT](https://www.jetbrains.com/help/idea/annotation-processors-support.html); for Kotlin, it's [KSP](https://kotlinlang.org/docs/ksp-overview.html))*.
+
+Jimmer entities support two important features: dynamism and immutability
+
+-   Dynamism
+
+    Jimmer objects seek the best balance between static and dynamic languages, combining the advantages of both:
+
+    -   Static language data objects have advantages such as high performance, spelling safety, type safety, and even null safety *(if using Kotlin)*, and Jimmer entities inherit these advantages.
+
+    -   Dynamic language data objects have a high degree of flexibility, and Jimmer entities inherit this advantage; each property can be missing *(but unlike dynamic languages, properties cannot be added, as this would inevitably violate the characteristics of static languages, and Jimmer does not need this ability)*.
+
+        > For Jimmer, an object lacking a property *(its value is unknown)* and an object having a null value property *(its value is known)* are completely different scenarios.
+
+    :::tip
+    This balanced design allows Jimmer to enjoy the benefits of static languages while giving data structures <ViewMore buttonText="tremendous flexibility" title="Flexibility of Jimmer Entities"><DynamicShape/></ViewMore>.
+
+    This absolute flexibility can be used to express both the output format of query operations and the input format of save operations.
+
+    This gives Jimmer a new positioning: an ORM designed for data structures of any shape. All its features are for operating data structures of any shape, rather than simple entity objects.
+    :::
+
+-   Immutability
+
+    Jimmer objects are immutable objects. The benefits of immutable objects are multifaceted, and there are many related articles and discussions, so this document will not repeat them.
+
+    :::tip
+    Jimmer chooses immutable objects to ensure that data structures never contain [circular references](https://en.wikipedia.org/wiki/Circular_reference).
+
+    This ensures that data structures formed by Jimmer entities and their associations can be directly serialized by Jackson without the need for any special serialization techniques or injecting additional information into the JSON, making it easily understandable by any programming language.
+    :::
+
+    However, immutable objects also have disadvantages. For example, if you have a very deep data structure, creating a new data structure based on it with some desired modifications would be very difficult, with the difficulty increasing rapidly as the depth increases.
+
+    -   ORM deals with very deep data structures, and Java's records and Kotlin's data classes are not suitable for handling very deep data structures.
+
+    -   The current JVM ecosystem lacks a solution that provides bilingual support for both Java and Kotlin while being adept at creating new immutable data structures based on existing deep data structures with desired modifications.
+
+    Fortunately, the `JavaScript/TypeScript` world has a sufficiently powerful solution: [immer](https://github.com/immerjs/immer), which can perfectly solve this problem. This solution works as follows:
+
+    1.  Open a temporary scope based on the existing immutable data structure.
+
+    2.  Within this scope, developers can obtain a draft data structure with the same shape and initial values as the original data structure, which can be modified at will, including modifying any deeply nested sub-objects.
+
+    3.  After the scope ends, the draft data structure will create a new data structure based on the collected modification operations. Unmodified local parts will be optimized and reuse the old objects.
+
+    Immer perfectly combines the advantages of immutable and mutable objects, with simple code, powerful functionality, and excellent performance. Therefore, Jimmer chose to port immer to the JVM ecosystem, and the project name is also a tribute to it. <ViewMore buttonText="See a quick demonstration" title="Immutable Objects Ported from immer"><ImmutableStep/></ViewMore>
+
+Reference links: [Dynamism](../object/dynamic), [Immutability](../object/immutable)
+
+#### 3.1.2. Generated DTO Type
+
+As mentioned earlier, Jimmer entities strike the best balance between static and dynamic language data objects, with dynamism bringing tremendous flexibility and determining the positioning of the entire framework.
+
+Jimmer objects allow certain properties to be missing, and an object lacking a property *(its value is unknown)* is completely different from an object having a null property *(its value is known)*.
+
+1.  For Jackson serialization, missing properties will be automatically ignored, just as we showed earlier.
+
+    If the server does not use the queried entity object itself but directly writes it to the HTTP Response, there is no need for a DTO, and using the entity object directly is convenient.
+
+2.  If you directly access a non-existent property using Java/Kotlin code, it will cause an exception. <ViewMore buttonText="See a quick demonstration"><Unloaded/></ViewMore>
+
+    If the server needs to access the queried entity object itself, this could introduce risks, although Jimmer entities still retain static language features in other aspects, such as spelling safety, type safety, and even null safety *(if using Kotlin)*.
+
+    > For example, in JPA, since Hibernate 3, lazy configuration is no longer limited to associated properties but can also be used for scalar properties. Later, this evolved into the `fetch` parameter of the JPA `@Basic` annotation, please refer [here](https://docs.oracle.com/javaee%2F7%2Fapi%2F%2F/javax/persistence/Basic.html).
+    >
+    > This has some similarity to the fact that any property in Jimmer objects can be missing, except that Jimmer generalizes this feature to any property. So, this exception in Jimmer is somewhat similar to [org.hibernate.LazyInitializationException](https://docs.jboss.org/hibernate/orm/5.6/javadocs/org/hibernate/LazyInitializationException.html).
+
+    So, this is not a new problem created by Jimmer, but rather an existing and accepted problem in the static language ORM ecosystem. However, it is undeniable that this does indeed undermine the safety of static languages.
+
+    If you want to pursue 100% static language safety, using `DTO` objects is the only way. However, the current DTO mapping technology in the JVM ecosystem has significant flaws.
+    -   Either you explicitly map properties *(e.g., pure manual mapping and conversion)*, which is extremely labor-intensive, tedious, and error-prone.
+    -   Or you implicitly map properties *(e.g., using [BeanUtils](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/beans/BeanUtils.html) technology)*, which introduces new safety issues that cannot be detected at compile-time.
+
+    Even if you use the powerful [mapstruct](https://mapstruct.org/), all you can do is choose between these two extremes.
+
+    Therefore, Jimmer provides a DTO language, where users can write very simple code, and compiling the project will automatically generate various rich DTO type definitions.
+
+    :::tip
+    The design goals of the DTO language are:
+
+    -   To make the process of generating DTO types simple enough so that DTO types are inexpensive.
+
+    -   To be 100% compliant with static language safety, detecting and reporting all issues at compile-time.
+    :::
+
+    In any sub-project *(not limited to entity definition sub-projects)*, developers can freely create files with the `dto` extension in the `src/main/dto` directory to automatically generate various DTO types at a low cost. <ViewMore buttonText="See a quick demonstration" title="DTO Language Showcase"><DTO/></ViewMore>
+
+    These low-cost, rapidly generated DTO types can be converted to and from Jimmer entity objects; therefore, any two DTO types can be converted to each other using Jimmer entities as an intermediate medium.
+
+Reference links: [DTO language](../object/view/dto-language)
+
+### 3.2. Fetcher
+
+:::tip
+Fetcher is one of the three most fundamental core features of Jimmer *(the other two are Save Command and SQL DSL)*.
+
+Jimmer is designed to query data structures of any shape, allowing you to control the format of queried data with the same granularity as [GraphQL](https://graphql.org/).
+:::
+
+First, let's get an initial impression of Jimmer's ability to control the shape of queried data structures through this animation *(you don't need to look too closely, just get a general idea)*. <ViewMore buttonText="View animation" title="Initial Impression of Fetcher"><ObjectFetcherPanel/></ViewMore>
+
+As mentioned earlier, you can directly use entity objects or the inexpensively generated DTO objects. Fetcher provides first-class support for querying both types of data objects. Let's demonstrate its usage through three scenarios:
+
+1.  Querying partial objects
+
+    A partial object refers to querying only a subset of an object's properties, containing less information than a single object. <ViewMore buttonText="See a quick demonstration" title="Querying Partial Objects" maxWidth="xl"><FetchPartial/></ViewMore>
+
+2.  Including associated objects
+
+    Select an entity as the aggregate root, not only querying the aggregate root object but also querying its associated objects, with no restrictions on depth or breadth. This level of granularity in format control is similar to GraphQL. <ViewMore buttonText="See a quick demonstration" title="Including Associated Objects" maxWidth="xl"><FetchAssociation/></ViewMore>
+
+3.  Recursive queries
+
+    If the entity contains a self-association property, you can perform recursive queries *(as of now, GraphQL does not support recursive queries)*. <ViewMore buttonText="See a quick demonstration" title="Recursive Queries" maxWidth="xl"><FetchRecursion/></ViewMore>
+
+:::info
+Users should actively use this feature to query data structures of any complexity, rather than writing business code to retrieve data from different parts and then combine them into a whole, because Fetcher has advantages that are difficult to replicate with business code:
+
+-   It can handle not only associated properties but also [complex calculated properties](../mapping/advanced/calculated/transient).
+-   It can fully utilize Jimmer's <ViewMore buttonText="associated property caching" variant="text"><AssociationCache/></ViewMore> and <ViewMore buttonText="calculated property caching" variant="text"><CalculatedCache/></ViewMore> to significantly optimize the performance of querying complex data structures.
+-   Entities support [remote associations](../spring/spring-cloud), i.e., ORM associations across microservice boundaries, with Jimmer automatically querying data from different microservices and assembling it into a single data structure.
+-   The entire deep-dive process is driven by breadth-first recursion to support batch query optimization.
+:::
+
+No work is required from developers, as the ORM itself has powerful capabilities that rival GraphQL. Therefore, whether you use Jimmer to build REST services or GraphQL services, query-related tasks are very simple.
+
+-   Quickly build REST services
+
+    The server controls the shape of the returned objects. If an HTTP API needs to return data in a certain structure, developers have two choices: either use the entity type directly or use the DTO language to cheaply generate DTO types.
+    
+    Whichever choice is made, the client passively accepts the data format returned by the server. Even if the client needs many different data structure shapes, the impact on the Jimmer-based server is minimal.
+
+    If developers choose to return entity objects directly instead of DTOs, the server does not have the <ViewMore buttonText="DTO explosion problem" variant="text"><DtoExplosion/></ViewMore>,
+    which is not a problem for the server; but for the client, this is very bad.
+
+    Jimmer generates Open API documentation and TypeScript code for the client. If the server developer chooses to return entity objects directly,
+    the `@FetchBy` annotation can be used to modify the return type of the Web method, which can define the DTO type for the client in the Open API and TypeScript code. <ViewMore buttonText="Client DTO"><CommunicationPanel/></ViewMore>
+
+-   Quickly build GraphQL services
+
+    Usually, providing GraphQL services is not a small task, and developers need to put a lot of effort into supporting the rich associations between GraphQL objects.
+
+    However, implementing GraphQL based on Jimmer is very easy because the ORM itself already has capabilities similar to GraphQL. Developers only need to implement queries for the aggregate root objects of the GraphQL query API, and the rich associations between GraphQL objects are automatically implemented by Jimmer.
+
+<details>
+<summary>Reference links</summary>
+
+|Link|Description|
+|---|---|
+|[Quick Preview/Query Any Shape](../quick-view/fetch)|Quick preview: Query any shape|
+|[jimmer-examples/tree/main/java/jimmer-sql](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-sql)|Example project, using Java and Jimmer to build REST services|
+|[jimmer-examples/tree/main/kotlin/jimmer-sql-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-sql-kt)|Example project, using Kotlin and Jimmer to build REST services|
+|[jimmer-examples/tree/main/java/jimmer-sql-graphql](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-sql-graphql)|Example project, using Java and Jimmer to build GraphQL services|
+|[jimmer-examples/tree/main/kotlin/jimmer-sql-graphql-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-sql-graphql-kt)|Example project, using Kotlin and Jimmer to build GraphQL services|
+|[jimmer-examples/tree/main/java/jimmer-cloud](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-cloud)|Example project, using Java and Jimmer to support ORM remote association across microservice boundaries|
+|[jimmer-examples/tree/main/kotlin/jimmer-cloud-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-cloud-kt)|Example project, using Kotlin and Jimmer to support ORM remote association across microservice boundaries|
+
+</details>
+
+### 3.3. Save Command
+
+:::tip
+Save Command is one of Jimmer's three most fundamental core capabilities *(the other two are Fetcher and SQL DSL)*.
+
+Save Command is designed specifically for complex forms. No matter how complex the form is, it essentially represents a data structure of any shape, and Jimmer allows developers to write data structures of any shape into the database with a single method call.
+:::
+
+No matter how complex the data structure provided by the user is, Jimmer will query a data structure of the same complexity from the database and find the differences *(this is not the actual working mechanism, but it's fine to understand this functionality from the user's perspective)*,
+and execute `insert`, `update`, and `delete` statements to update the differences. <ViewMore buttonText="View illustration" title="Save Command Illustration"><SaveCommandPanel/></ViewMore>
+
+However, if the client is allowed to upload entity objects representing data structures of any shape, the client will have unrestricted data modification capabilities, which would seriously compromise security. Therefore, Input DTOs must be generated using the DTO language, and then used as input parameters for the Web API. That is:
+
+-   Dynamic entities serve as the internal mechanism, allowing the Save Command to save data structures of any shape, providing functional support for unlimited possibilities.
+
+-   Input DTO acts as a security guard, strictly limiting the user's input format, and exposing only limited data entry capabilities.
+
+Next, we will demonstrate the basic usage of the Save Command through four cases:
+
+1.  Save a standalone object
+
+    This is the simplest case because a standalone object does not have any associated data. <ViewMore buttonText="View quick demo" title="Save Standalone Object"><SaveAlone/></ViewMore>
+
+2.  Save short associations
+
+    A short association refers to only changing the association relationship between the current object and other objects, without further modifying the associated objects.
+    For the UI, a reference association (one-to-one and many-to-one) is represented as a single-selection menu;
+    a collection association (one-to-many and many-to-many) is represented as a multi-selection menu
+    . <ViewMore buttonText="Common UI for Short Association"><ShortAssociation/></ViewMore> <ViewMore buttonText="View quick demo" title="Save Short Association"><SaveShortAssociation/></ViewMore>
+
+3.  Save long associations
+
+    A long association refers to not only changing the association relationship between the current object and other objects, but also further modifying the associated objects.
+    For the UI, the forms can be diverse, with nested sub-tables being the most common *(one-to-many)*
+    : <ViewMore buttonText="Common UI for Long Association"><LongAssociation/></ViewMore> <ViewMore buttonText="View quick demo" title="Save Long Association"><SaveLongAssociation/></ViewMore>
+
+4.  Recursively save tree structures 
+
+    This example is a bit different, requiring a slight modification of the root node's data before saving. <ViewMore buttonText="View quick demo" title="Recursively Save Tree Structures"><SaveRecursiveTree/></ViewMore>
+
+<details>
+<summary>Reference links</summary>
+
+|Link|Description|
+|---|---|
+|[Quick Preview/Query Any Shape](../quick-view/save)|Quick preview: Save any shape|
+|[jimmer-examples/tree/main/java/save-command](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/save-command)|Example project, using Java and Jimmer to demonstrate various scenarios of Save Command|
+|[jimmer-examples/tree/main/kotlin/save-command-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/save-command-kt)|Example project, using Kotlin and Jimmer to demonstrate various scenarios of Save Command|
+|[jimmer-examples/tree/main/java/jimmer-sql](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-sql)|Example project, using Java and Jimmer to build REST services|
+|[jimmer-examples/tree/main/kotlin/jimmer-sql-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-sql-kt)|Example project, using Kotlin and Jimmer to build REST services|
+|[jimmer-examples/tree/main/java/jimmer-sql-graphql](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-sql-graphql)|Example project, using Java and Jimmer to build GraphQL services|
+|[jimmer-examples/tree/main/kotlin/jimmer-sql-graphql-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-sql-graphql-kt)|Example project, using Kotlin and Jimmer to build GraphQL services|
+
+</details>
+
+### 3.4. SQL DSL
+
+:::tip
+SQL DSL is one of Jimmer's three most fundamental core capabilities *(the other two are Fetcher and Save Command)*.
+
+Jimmer's SQL DSL is designed for arbitrary complex dynamic SQL.
+:::
+
+Currently, there are dozens of SQL DSLs in the entire JVM ecosystem. Among them, the ORM-style [QueryDSL](http://querydsl.com/) and the NativeSQL-style [JOOQ](https://www.jooq.org/) are the most well-known. What are the characteristics of Jimmer's SQL DSL?
+
+-   Jimmer's SQL DSL is designed from the ground up for arbitrary complex dynamic SQL, including two powerful capabilities: dynamic table joins and implicit subqueries.
+
+    > Native SQL is not conducive to building complex dynamic queries, and the purpose of Jimmer's SQL DSL is to provide a solution for this; while the strong type safety that all SQL DSLs can achieve is just a side effect.
+
+-   Intelligent paging support, where developers only need to use the DSL to construct a regular list query, and Jimmer automatically generates a total row count query and automatically combines it with the list query to complete the paging query.
+
+-   Jimmer's SQL DSL can embed native SQL expressions.
+
+Due to space limitations, this article only discusses the first point above. Let's get a basic understanding of Jimmer's SQL DSL through three small examples:
+
+1.  Simple dynamic query
+
+    A simple dynamic query to establish an initial impression. <ViewMore buttonText="View quick demo" title="Simple Dynamic Query"><DynamicWhere/></ViewMore>
+
+2.  Dynamic table join
+
+    Dynamically add SQL conditions for the associated objects of reference association *(one-to-one or many-to-one)* properties. <ViewMore buttonText="View quick demo" title="Dynamic Table Join"><DynamicJoin/></ViewMore>
+
+3.  Implicit subquery
+
+    Jimmer supports more complete regular subqueries. However, some subqueries closely related to entity associations can be written as these simpler implicit subqueries.
+
+    Dynamically add SQL conditions for the associated objects of collection association *(one-to-many or many-to-many)* properties. <ViewMore buttonText="View quick demo" title="Implicit Subquery"><ImplicitSubquery/></ViewMore>
+
+:::tip
+In fact, users can also leverage the DTO language to write specification DTOs, allowing Jimmer to automatically generate query condition parameters and all the dynamic query behaviors you've seen above.
+
+This more convenient feature is called `Super QBE`, Here, we adopt this feature to replace all the features introduced above. <ViewMore buttonText="View quick demo" title="Super QBE"><SuperQBE/></ViewMore>
+:::
+
+<details>
+<summary>Reference links</summary>
+
+|Link|Description|
+|---|---|
+|[Quick Preview/Query Any Shape](../quick-view/dsl)|Quick preview: Arbitrary dynamic queries|
+|[Dynamic Table Join](../query/dynamic-join/)||
+|[Implicit Subquery](../query/implicit-subquery)||
+|[Intelligent Paging](../query/paging)|Not shown in this article|
+|[Native Expression](../query/native-sql)|Not shown in this article, how to embed native SQL fragments in a strongly-typed SQL DSL|
+|[Dynamic Ordering](../query/dynamic-order)|Not shown in this article|
+|[Super QBE](../query/super_qbe)||
+
+Here, no links to relevant examples are provided because all examples involve using the SQL DSL.
+</details>
+
+### 3.5 Trigger
+
+This feature is similar to the database's after-trigger, which notifies the application after a database change occurs.
+
+The trigger not only notifies developers of what changes have occurred to which entity objects, but also performs ORM mapping on the change event information to notify developers of what associated changes have occurred.
+
+The trigger lays a solid foundation for another feature: caching.
+
+Jimmer supports two different types of triggers: BinLog triggers and Transaction triggers
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th>BinLog Trigger</th>
+<th>Transaction Trigger (Default Off)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Working Principle</td>
+<td>Discover data changes by integrating mature CDC solutions in the industry <i>(e.g., maxwell, debezium)</i></td>
+<td>Discover database changes through Jimmer's capability</td>
+</tr>
+<tr>
+<td>Notification Timing</td>
+<td>After transaction commit</td>
+<td>Before transaction commit</td>
+</tr>
+<tr>
+<td>Advantages</td>
+<td>Can sense database changes caused by any reason, including database changes that bypass the system</td>
+<td>Either the original change and the new change caused by the trigger both succeed or both fail</td>
+</tr>
+<tr>
+<td rowspan="3">Disadvantages</td>
+<td rowspan="3">After the transaction is committed, there is a slight delay in the CDC service pushing</td>
+<td>Can only sense changes to the database caused by modifications through Jimmer in the current JVM process, and cannot handle changes caused by any other reasons</td>
+</tr>
+<tr>
+<td>The duration of the current transaction will be extended, and the unlock operation of related resources will also be delayed</td>
+</tr>
+<tr>
+<td>Will cause Jimmer's modification behavior to the database to require more additional queries internally</td>
+</tr>
+<tr>
+<td>Applicable Scenarios</td>
+<td>Most scenarios, including but not limited to: cache synchronization, data synchronization across heterogeneous systems</td>
+<td>Additional behavior that must participate in the same transaction as the main business logic</td>
+</tr>
+</tbody>
+</table>
+
+Reference link: [Trigger](../mutation/trigger)
+
+### 3.6. Cache
+
+Jimmer's caching capability is very powerful, with the following 3 features:
+
+-   Supports multi-level caching, and each level of caching allows users to choose their preferred technology.
+
+    > In the accompanying example, the first-level cache is [Caffeine](https://github.com/ben-manes/caffeine); the second-level cache is [Redis](https://redis.io/)
+
+-   Significantly increases the application scope of caching.
+
+    No longer limited to the most common `id->object` caching, i.e., <ViewMore buttonText="Object Cache"><ObjectCache/></ViewMore>, but also supports the following three types of caching:
+
+    -   `id->associated id` caching, i.e., <ViewMore buttonText="Association Cache"><AssociationCache/></ViewMore>
+
+        Association caching can significantly improve the performance of navigating between associated objects, which is very helpful for Jimmer's core functionality of querying data structures of any complexity.
+
+    -   `id->computed result` caching, i.e., <ViewMore buttonText="Calculated Cache"><CalculatedCache/></ViewMore>
+
+        Calculated caching is designed for [complex computed properties](../mapping/advanced/calculated/transient), avoiding repeated calculations for multiple queries, which is also very helpful for Jimmer's core functionality of querying data structures of any complexity.
+
+    -   Can also be combined with the permission system. Since users with different identities see different data in the database, they should also see different cached data, i.e., <ViewMore buttonText="Multi-View Cache"><MultiViewCache/></ViewMore>
+
+        > Storing different data for users with different identities is very memory-intensive and should definitely not be used for JVM internal caching. For external caches like Redis, it should also be used with caution, only for very important data.
+
+    :::info
+    Q: Why has business system caching been mainly limited to object caching for a long time, lacking diversity?
+
+    A: Without the underlying framework providing highly automated support for cache consistency, the cost of using business code to maintain other types of caching is too high.
+    :::
+
+-   Highly automated cache consistency.
+
+    Jimmer provides highly automated support for cache consistency, simply by enabling the Jimmer Trigger *(whether it's the BinLog trigger or the Transaction trigger)*.
+
+    -   For `object cache` and `association cache`, their consistency is fully automated and requires no intervention from developers.
+
+    -   For `calculated cache` and `multi-view cache`, developers' assistance is needed, but what developers need to do is very simple.
+
+    <ViewMore buttonText="View the effect of cache consistency" title="Highly Automated Cache Consistency"><CacheConsistencyPanel/></ViewMore>
+
+Reference link: [Caching](../cache)
+
+### 3.7. Global Filter
+
+Global filters add inherent SQL filtering conditions to entities in a plugin manner outside the SQL DSL system. The most common application scenario is row-based permission management.
+
+Global filters are very flexible and can easily integrate with any IoC framework *(such as Spring)*, allowing free access to business context information and thus implementing filtering logic that is closely integrated with the business.
+
+Reference link: [Global Filter](../query/global-filter)
+
+### 3.8. Draft Interceptor
+
+The Draft Interceptor is similar to the database's before-trigger, giving users one last chance to adjust the data that is about to be saved before the database change occurs.
+
+The Draft Interceptor is very flexible and can easily integrate with any IoC framework *(such as Spring)*, allowing free access to business context information and thus implementing data adjustment logic that is closely integrated with the business.
+
+Reference link: [Interceptor](../mutation/draft-interceptor)
+
+### 3.9. Logical Deletion
+
+Logical deletion refers to the fact that a business-level data deletion operation does not actually cause the data to be deleted from the database, but simply modifies a field of the data to mark it as "deleted".
+
+Logical deletion also provides a built-in Global Filter, which causes data marked as "deleted" to be excluded from any query and unaffected by any modification statement.
+
+Jimmer's logical deletion supports both entity tables and join tables.
+
+Reference link: [Logical Deletion of Entity Tables](../mapping/advanced/logical-deleted/entity), [Logical Deletion of Join Tables](../mapping/advanced/logical-deleted/join-table)
+
+### 3.10. Remote Associations
+
+Jimmer entities support [remote associations](../spring/spring-cloud), i.e., ORM associations across microservice boundaries.
+
+When querying a specific complex data structure, if the shape of the data structure spans multiple microservices, Jimmer will automatically query data from different microservices and assemble it into a whole to return to the developer.
+
+:::note
+Remote Associations is just the first feature for microservice development in a limited time, aiming to prove to developers that the ORM technology system can still be very powerful in the microservice technology system.
+
+After Jimmer gradually matures and releases the official 1.0 version, more features will be added to the microservice technology system to abstract and simplify more tedious details in that system.
+:::
+
+Reference link: [Remote Association Mapping](../mapping/advanced/remote), [Remote Association Support](../spring/spring-cloud)
+
+## 4. Ecosystem
+
+Next, we will introduce Jimmer's third-party ecosystem, which are all contributed by Jimmer users. We would like to express our sincere gratitude.
+
+-   DTO language IntelliJ plugin
+
+    https://github.com/ClearPlume/jimmer-dto
+
+-   Entity model generation tool
+
+    The following tools focus on generating entity models based on the database
+
+    |Project Type|Language Support|Project Address|
+    |---|---|---|
+    |IntelliJ Plugin|Java&Kotlin|https://github.com/ClearPlume/jimmer-generator|
+    |IntelliJ Plugin|Java&Kotlin|https://github.com/huyaro/CodeGenX|
+    |Maven Plugin|Java|https://github.com/TokgoRonin/code-generator-jimmer|
+    |Gradle Plugin|Java&Kotlin|https://github.com/Enaium/jimmer-gradle|
+    |Model Designer|Java&Kotlin|https://pot-mot.github.io/jimmer-code-gen-doc|
+
+-   Quarkus extension
+
+    https://github.com/flynndi/quarkus-jimmer-extension
+
+-   Solon extension
+
+    https://github.com/zengyufei/xm-jimmer-solon-plugin
+
+-   Gradle Plugin
+
+    https://github.com/ArgonarioD/gradle-plugin-jimmer
+    
+    https://github.com/Enaium/jimmer-gradle
+
+## 5. Notes
+
+When developing with Jimmer, there is a note of caution that needs attention. Please refer to [here](./apt-ksp#notes)

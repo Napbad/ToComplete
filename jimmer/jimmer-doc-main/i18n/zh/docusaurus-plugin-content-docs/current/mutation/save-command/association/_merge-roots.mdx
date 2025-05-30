@@ -1,0 +1,66 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<details>
+<summary>保存根对象并非本文的讨论重点，默认折叠</summary>
+<Tabs groupId="database">
+<TabItem value="h2" label="H2">
+
+```sql
+merge into BOOK_STORE(
+    NAME
+) key(NAME) values(
+    ?
+)
+/* batch-0: [MANNING] */
+/* batch-1: [AMAZON] */
+```
+
+</TabItem>
+<TabItem value="mysql" label="Mysql">
+
+:::caution
+默认情况下，MySQL的批量操作不会被采用，而采用多条SQL。具体细节请参考[MySQL的问题](../mysql)
+:::
+
+1.  ```sql
+    insert into BOOK_STORE(
+        NAME
+    ) values(
+        ? /* MANNING */
+    ) on duplicate key update
+        /* fake update to return all ids */ ID = last_insert_id(ID)
+
+2.  ```sql
+    insert into BOOK_STORE(
+        NAME
+    ) values(
+        ? /* AMAZON */
+    ) on duplicate key update
+        /* fake update to return all ids */ ID = last_insert_id(ID)
+    ```
+
+</TabItem>
+<TabItem value="postgres" label="Postgres">
+
+```sql
+insert into BOOK_STORE(
+    NAME
+) values(
+    ?
+) on conflict(
+    NAME
+) do update set
+    /* fake update to return all ids */ NAME = execluded.NAME
+returning ID
+/* batch-0: [MANNING] */
+/* batch-1: [AMAZON] */
+```
+
+</TabItem>
+</Tabs>
+
+-   假设`MANNING`存在，现有id为`2`
+-   假设`AMAZON`存在，插入后，数据库自动编号新分配的id为`100`
+
+</details>

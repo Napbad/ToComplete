@@ -1,0 +1,71 @@
+---
+sidebar_position: 1
+title: 欢迎 ✦
+---
+
+## 入门注意
+
+Jimmer是采用预编译技术的ORM框架，绝大部分魔法都来自编译时，而非运行时。因此，需要预编行为：
+
+-   对于Java而言，就是APT，即[Annotation Processor Tool](https://www.jetbrains.com/help/idea/annotation-processors-support.html)
+
+-   Kotlin而言，就是KSP，即[Kotlin Symbol Processing](https://kotlinlang.org/docs/ksp-overview.html)
+
+对于没有任何JVM预编译类型框架经验的读者而言，项目的构建方式是陌生的。不建议这类读者直接上手写代码，更建议先运行最简单的官方例子
+
+-   Java: [jimmer-examples/java/jimmer-simple](https://github.com/babyfish-ct/jimmer-examples/tree/main/java/jimmer-simple)
+
+-   Kotin: [jimmer-examples/kotlin/jimmer-simpl-kt](https://github.com/babyfish-ct/jimmer-examples/tree/main/kotlin/jimmer-simple-kt)
+
+把这个最简例子成功运行起来，这类读者将会快速熟悉这类项目的构建过程
+
+-   无需安装任何环境，该项目可以直接运行。因为项目采用H2内存数据库并会在启动时自动创建数据
+
+-   如果直接用IDE打开未经首次编译的项目，会发现一些类型并未定义，这是因为这些类型在经过预编译后才会被自动生成。请无视相关错误，直接点击IDE的Run按钮，错误会自动消失
+
+-   使用社区贡献的[Jimmer-Buddy](https://github.com/Enaium/JimmerBuddy)插件，可以提高预编译过程的开发体验
+
+## 例子和快速上手在哪？
+
+面对一个新的框架，开发人员的第一反应是例子和快速上手在什么地方？
+
+-   附带例子：[官方例子](https://github.com/babyfish-ct/jimmer-examples)
+
+-   快速上手：[快速上手](../quick-view/get-started/)
+
+## 关于本文档
+
+本文档的章节分为两种
+
+-   具备 ★ 标记的教程性章节。
+
+    1.  [初识Jimmer/项目介绍](./introduction)
+
+        最重要的一篇文章，具备 ✦ 标记。
+        
+        论述Jimmer的变革，介绍全部功能，提供丰富的快捷示范。
+
+    2.  [快速预览](../quick-view/)
+
+        快速Jimmer最基础的三个入门功能: 
+        1.  查询任意形状
+        2.  保存任意形状
+        3.  任意动态查询。
+
+        > 这个章节仅包含这3个最核心的能力，不包含其他高级功能。
+
+    3.  [案例展示](../showcase)
+
+        对于任何一个框架，总有一部分功能可以用代码展示，而不需要过多的论述去帮助理解。
+
+        所有这类便于用代码展示而无需过多论述的功能，都在本章中罗列。
+
+-   其他章节。
+
+    其余章节应该被视为为工具书，而非教程。
+    
+    这些章节深入讲解各个功能的细节，当然，也包括高级功能。
+
+##  讨论
+
+欢迎加入Jimmer大家庭，QQ群：622853051

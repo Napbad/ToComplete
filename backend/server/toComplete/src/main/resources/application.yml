@@ -1,0 +1,74 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: toComplete
+  
+  # 数据库配置
+  datasource:
+    url: jdbc:mysql://localhost:3306/tocomplete?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 
+      database: 0
+      timeout: 6000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
+  
+  # Jackson配置
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    property-naming-strategy: SNAKE_CASE
+
+# Jimmer配置
+jimmer:
+  # 显示SQL
+  show-sql: true
+  # 格式化SQL
+  pretty-sql: true
+  # 内联SQL参数
+  inline-sql-variables: true
+  # 数据库方言
+  dialect: org.babyfish.jimmer.sql.dialect.MySqlDialect
+  # 客户端配置
+  client:
+    ts:
+      path: /ts.zip
+    openapi:
+      path: /openapi.yml
+      ui-path: /openapi-ui
+
+# 日志配置
+logging:
+  level:
+    org.babyfish.jimmer.sql: DEBUG
+    org.napbad.tocomplete: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# JWT配置
+jwt:
+  secret: toCompleteSecretKeyForJWT2024
+  expiration: 86400000 # 24小时
+
+# 应用配置
+app:
+  # 上传文件路径
+  upload-path: ./uploads
+  # 允许的文件类型
+  allowed-file-types: jpg,jpeg,png,gif,bmp
+  # 最大文件大小 (10MB)
+  max-file-size: 10485760 

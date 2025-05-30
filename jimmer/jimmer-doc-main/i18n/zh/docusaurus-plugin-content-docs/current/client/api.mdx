@@ -1,0 +1,1030 @@
+---
+sidebar_position: 1
+title: 生成客户端API
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { DtoExplosion } from "@site/src/components/Image";
+import { ViewMore } from '@site/src/components/ViewMore';
+
+## 启用客户端能力
+
+默认情况下，自动生成客户端的能力是关闭的。要启用这种个功能，有两种选择
+
+1.  采用`@EnableImplicitApi`修饰项目中任何一个类。
+
+    对于Spring Boot应用而言，Application是一个不错的选择。由于过于简单，无需示范。
+
+2.  为每一个Controller和内部的HTTP放方法加上@Api
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java title="HelloWorldController.java"
+    // highlight-next-line
+    @Api
+    @RestController
+    public class HelloWorldController {
+        
+        // highlight-next-line
+        @Api
+        @GetMapping("/helloworld")
+        public String helloworld() {
+            return "hello world"
+        }
+    }
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin title="HelloWorldController.kt"
+    // highlight-next-line
+    @Api
+    @RestController
+    class HelloWorldController {
+        
+        // highlight-next-line
+        @Api
+        @GetMapping("/helloworld")
+        fun helloworld() = "hello world"
+    }
+    ```
+
+    </TabItem>
+    </Tabs>
+
+为什么要如此设计呢？让我们来看一个Controller
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="XController.java"
+@RestController
+public class XController {
+
+    @GetMapping("/clientFriendlyData") 
+    SomePojo clientFriendlyData() { ❶
+        ...略...
+    }
+
+    @GetMapping("/clientUnfriendlyData") 
+    Object clientUnfriendlyData() { ❷
+        ...略...
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="XController.kt"
+@RestController
+class XController() {
+
+    @GetMapping("/clientFriendlyData")
+    fun clientFriendlyData(): SomePojo = ❶
+        ...略..
+
+    @GetMapping("/clientUnfriendlyData") 
+    fun clientUnfriendlyData(): Any = ❷
+        ...略...
+}
+```
+
+</TabItem>
+</Tabs>
+
+-   ❶ 精确的Api定义，对客户端友好
+
+-   ❷ 非常模糊的Api定义，对客户端不友好，甚至可以说是远程API的不良设计。
+
+当然，导致客户端不友好的原因很多，这里只是列举一种最简单的案例。
+
+如果要求Jimmer为客户端不友好Api生成客户端代码，将会导致编译错误。所以，我们需要有选择性地对一部分Api生成客户端代码，而非盲目地处理所有Api。
+
+-   如果大部分Api都是客户端不友好的，只有个别Api才是友好的 *（这种项目处理的大部分信息都非结构化，结构化Api很少）*，建议选择显式地为Controller类和HTTP方法添加@Api注解。由于这种做法已经示范过，不再重复。
+
+-   如果大部分Api都是客户端友好的，只有个别Api才是不友好的，推荐
+
+    1.  先用`@EnableImplicitApi`修饰任何一个类，比如SpringBoot的主类。由于过于简单，不必示范。
+
+    2.  再用`@ApiIgnore`修饰无法支持的类或方法，比如
+        
+        <Tabs groupId="language">
+        <TabItem value="java" label="Java">
+
+        ```java title="XController.java"
+        @RestController
+        public class XController {
+
+            @GetMapping("/clientFriendlyData") 
+            SomePojo clientFriendlyData() {
+                ...略...
+            }
+
+            // highlight-next-line
+            @ApiIgnore
+            @GetMapping("/clientUnfriendlyData") 
+            Object clientUnfriendlyData() {
+                ...略...
+            }
+        }
+        ```
+
+        </TabItem>
+        <TabItem value="kotlin" label="Kotlin">
+
+        ```kotlin title="XController.kt"
+        @RestController
+        class XController() {
+
+            @GetMapping("/clientFriendlyData")
+            fun clientFriendlyData(): SomePojo = 
+                ...略..
+
+            // highlight-next-line
+            @ApiIgnore
+            @GetMapping("/clientUnfriendlyData") 
+            fun clientUnfriendlyData(): Any = 
+                ...略...
+        }
+        ```
+
+        </TabItem>
+        </Tabs>
+
+:::tip
+`@ApiIgnore`还有另外一个重要作用，比如Spring安全相关的编程中，Java/Kotlin方法经常通过参数注入一些安全上下文相关的东西，比如`javax.security.Principal`类型的参数，这类参数只是spring运行所需，并非Api契约的一部分，可以为这类参数添加`@ApiIgnore`。
+:::
+
+## 开发Web服务
+
+### 声明@FetchBy
+
+前面讨论了，使用Jimmer构建REST服务并由服务端罗列客户端所需对象的所有形状是本文要讨论的话题。
+
+要使用这种开发方式，需要在REST API中使用注解`@org.babyfish.jimmer.client.FetchBy`修饰返回类型中的动态实体类型，为客户端标注动态对象的具体形状。
+
+:::tip
+`@FetchBy`并不是简单地修饰REST API的返回值，而是用于修饰类型引用，其声明代码如下
+```java
+package org.babyfish.jimmer.client;
+
+import java.lang.annotation.*;
+
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+// highlight-next-line
+@Target(ElementType.TYPE_USE)
+public @interface FetchBy {
+
+    ...略...
+}
+```
+
+因此，REST API的返回类型非常灵活，你可以在任何地方 *(包括范型参数)* 使用它修饰Jimmer实体类型，例如
+
+-   `@FetchBy("...") Book`
+-   `List<@FetchBy("...") Book>`
+-   `Page<@FetchBy("...") Book>`
+-   `Tuple2<@FetchBy("...") BookStore, @FetchBy("...") Author>`
+-   `Map<String, Map<String, @FetchBy("...") Book>>`
+:::
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="BookController.java"
+@GetMapping("/books")
+public Page<
+    @FetchBy("SIMPLE_BOOK") Book ❶
+> findBookById(
+    @RequestParam(defaultValue = "0") int pageIndex,
+    @RequestParam(defaultValue = "5") int pageSize,
+    @RequestParam(defaultValue = "name asc, edition desc") String sortCode
+) {
+    return bookRepository.findBooks(
+            PageRequest.of(pageIndex, pageSize, SortUtils.toSort(sortCode)),
+            SIMPLE_BOOK ❷
+    );
+}
+
+@GetMapping("book/{id}")
+@Nullable
+public 
+    @FetchBy("COMPLEX_BOOK") Book ❸
+findComplexBook(
+        @PathVariable("id") long id
+) {
+    return bookRepository.findNullable(
+        id, 
+        COMPLEX_BOOK ❹
+    );
+}
+
+private static final Fetcher<Book> SIMPLE_BOOK = ❺
+    Fetchers.BOOK_BOOK
+        .name();
+
+private static final Fetcher<Book> COMPLEX_BOOK = ❻
+    Fetchers.BOOK_BOOK
+        .allScalarFields()
+        .store(
+            Fetchers.BOOK_STORE_BOOK
+                .name()
+        )
+        .authors(
+            Fetchers.AUTHOR_BOOK
+                .firstName()
+                .lastName()
+        );
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="BookController.kt"
+@GetMapping("/books")
+fun findBooks(
+    @RequestParam(defaultValue = "0") pageIndex: Int,
+    @RequestParam(defaultValue = "5") pageSize: Int,
+    @RequestParam(defaultValue = "name asc, edition desc") sortCode: String
+): Page<
+    @FetchBy("SIMPLE_BOOK") Book ❶
+> =
+    bookRepository.findBooks(
+        PageRequest.of(pageIndex, pageSize, SortUtils.toSort(sortCode)),
+        name,
+        storeName,
+        authorName,
+        SIMPLE_BOOK ❷
+    )
+
+@GetMapping("/book/{id}")
+fun findBookById(
+    @PathVariable id: Long,
+): @FetchBy("COMPLEX_BOOK") Book? = ❸
+    bookRepository.findNullable(
+        id, 
+        COMPLEX_BOOK ❹
+    )
+
+companion object {
+
+    private val SIMPLE_BOOK = ❺
+        newFetcher(Book::class).by {
+            name()
+        }
+
+    private val COMPLEX_BOOK = ❻
+        newFetcher(Book::class).by {
+
+            allScalarFields()
+
+            store {
+                name()
+            }
+            
+            authors {
+                firstName()
+                lastName()
+            }
+        }
+}
+```
+
+</TabItem>
+</Tabs>
+
+-   ❶ 对外承诺，`GET /books`返回的分页对象中的每一个`Book`对象的形状为静态常量`SIMPLE_BOOK`所表达的形状
+
+-   ❷ 内部实现，`GET /books`内部使用静态常量`SIMPLE_BOOK`查询数据
+
+    :::caution
+    作为对外承诺的❶和作为内部实现的❷必须一致
+    :::
+
+-   ❸ 对外承诺，如果`GET /book/{id}`返回非null, 其形状为静态常量`COMPLEX_BOOK`所表达的形状
+
+-   ❹ 内部实现，`GET /book/{id}`内部使用静态常量`COMPLEX_BOOK`查询数据
+
+    :::caution
+    作为对外承诺的❸和作为内部实现的❹必须一致
+    :::
+
+-   ❺和❻，以静态常量的方式声明对象的形状。
+
+通过@FetchBy的修饰，Jimmer就明白每个对象对外返回的数据的具体形状了，它就可以为客户端生成代码了，包括TypeScript。
+
+### @DefaultFetcherOwner
+
+在上个例子中，使用注解`@FetchBy`的类和为各种形状声明`Fetcher`类型静态常量的类是同一个类 *(BookController)*。
+
+若非如此，需要为`@FetchBy`注解指定`ownerType`参数，例如
+
+`@FetchBy(value = "COMPLEX_BOOK", ownerType = FetcherConstants.class)`
+
+然而，为每个`@FetchBy`都配置`ownerType`比较繁琐，因此Jimmer支持`@DefaultFetcherOwner`
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="BookController"
+@RestController
+// highlight-next-line
+@DefaultFetcherOwner(FetcherConstants.class)
+public class BookController {
+
+    public List<@FetchBy("SIMPLE_BOOK") Book> getSimpleBooks(...略...) {
+        ...略...
+    }
+
+    public List<@FetchBy("DEFAULT_BOOK") Book> getDefaultBooks(...略...) {
+        ...略...
+    }
+
+    @Nullable
+    public @FetchBy("COMPLEX_BOOK") Book findComplexBookById(long id) {
+        ...略...
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="BookController"
+@RestController
+// highlight-next-line
+@DefaultFetcherOwner(FetcherConstants.class)
+class BookController {
+
+    fun getSimpleBooks(...略...): List<@FetchBy("SIMPLE_BOOK") Book> =
+        ...略...
+
+    fun getDefaultBooks(...略...): List<@FetchBy("DEFAULT_BOOK") Book> =
+        ...略...
+
+    fun findComplexBookById(long id): @FetchBy("COMPLEX_BOOK") Book? =
+        ...略...
+}
+```
+
+</TabItem>
+</Tabs>
+
+在类级别使用`@DefaultFetcherOwner`可以一次性调整所有`@FetchBy`的`ownerType`属性，不必为每个`@FetchBy`配置`ownerType`了。
+
+## 查看Api文档
+
+为了识别`@FetchBy`等Jimmer特有的注解，Jimmer对OpenAPI/Swagger给予了一套极具特色的实现。
+
+无需使用JVM生态中任何其他关于自动生成OpenAPI/Swagger的框架，只需对`application.yml`*(或`application.properties`)*进行修改如下即可
+
+```yml title="application.yml"
+jimmer:
+    ...省略其他配置...
+    client:
+        openapi:
+            # highlight-next-line
+            path: /openapi.yml
+            # highlight-next-line
+            ui-path: /openapi.html
+            properties:
+                info:
+                    title: My Web Service
+                    description: |
+                        Restore the DTO explosion that was 
+                        eliminated by server-side developers
+                    version: 1.0
+```
+
+启动Web项目，使用浏览器访问其`/openapi.html`，则可见
+
+![openapi](@site/static/img/openapi/openapi.webp)
+
+-   展开`/books`，可以看到返回的集合中，每一个元素都是一个相对简单的DTO对象
+
+    ![openapi-simple](@site/static/img/openapi/simple.webp)
+
+-   展开`/books/{id}`，可以看到返回类型是一个相对复杂的DTO类型
+
+    ![openapi-complex](@site/static/img/openapi/complex.webp)
+
+## 开发Web客户端
+
+### 生成TypeScript代码
+
+可以在`application.yml`或`application.properties`中声明如下配置，用于下载相关的客户端代码
+
+```
+jimmer:
+    ...省略其他配置...
+    client:
+        ts:
+            path: /ts.zip ❶
+```
+
+目前，Jimmer支持生成两种客户端代码，TypeScript和Spring Cloud所需的Java Feign Client代码
+
+-   ❶ 可通过 http://localhost:8080/ts.zip 下载Web客户端所需的TypeScript代码
+
+-   ❷ 可通过 http://localhost:8080/java-feign.zip 下载Spring Cloud所需的Java Feign Client代码
+
+接下来，我们讨论TypeScript代码。
+
+启动服务，下载http://localhost:8080/ts.zip，解压缩。设解压缩后的根目录为`${ts_root}`:
+
+让我们先看`${ts_root}/model/dto/BookDto.ts`
+
+```ts title="BookDto.ts"
+export type BookDto = {
+    // highlight-next-line
+    'BookController/SIMPLE_BOOK': {
+        readonly id: number, 
+        readonly name: string
+    }, 
+    // highlight-next-line
+    'BookController/COMPLEX_BOOK': {
+        readonly id: number, 
+        readonly name: string, 
+        readonly edition: number, 
+        readonly price: number, 
+        readonly store?: {
+            readonly id: number, 
+            readonly name: string
+        }, 
+        readonly authors: ReadonlyArray<{
+            readonly id: number, 
+            readonly firstName: string, 
+            readonly lastName: string
+        }>
+    }
+}
+```
+
+:::info
+很明显，在服务端被消灭掉的DTO爆炸，在客户端被恢复了。
+:::
+
+让我们再看看`${ts_root}/services/BookService.ts`
+
+```ts
+import type { BookDto } from '../model/dto';
+import type { Page } from '../model/static';
+
+export class BookService {
+    
+    async findBooks(
+        options: BookServiceOptions['findBooks']
+    ): Promise<
+        Page<
+            // highlight-next-line
+            BookDto['BookService/SIMPLE_BOOK']
+        >
+    > {
+        ...省略代码...
+    }
+
+    async findBookById(
+        options: BookServiceOptions['findBookById']
+    ): Promise<
+        // highlight-next-line
+        BookDto['BookService/COMPLEX_BOOK'] | 
+        undefined
+    > {
+        ...省略代码...
+    }
+
+    ...省略其他代码...
+}
+
+export type BookServiceOptions = {
+    'findBooks': {
+        readonly pageIndex: number, 
+        readonly pageSize: number, 
+        readonly sortCode: string
+    },
+    'findBookById': {
+        readonly id: number
+    }
+}
+```
+
+:::info
+很明显，每个业务场景的返回类型都得到了精确的定义。
+:::
+
+### 使用生成的TypeScript代码
+
+1.  创建React项目
+
+    首先创建一个基于typescript的react项目
+
+    ```sh
+    yarn create react-app my-web-app --template typescript
+    ```
+
+2.  自动生成客户端代码 
+
+    很显然，不可能在每次服务端发生变化的时候，都要求客户端开发人员都需要手动下载服务端代码，解压，并替换本地代码。
+
+    所以，我们需要编写一个小脚本，自动完成最新TypeScript代码的下载、解压和替换。
+
+    在项目根目录下添加文件夹`scripts`，在其下添加文件`generate-api.js`，该文件由nodejs执行，是开发工具的代码，不是客户端本身的代码。
+
+    ```js title="scripts/generate-api.js"
+    const http = require('http'); 
+    const fs = require('fs');
+    const fse = require('fs-extra');
+    const uuid = require('uuid');
+    const tempDir = require('temp-dir');
+    const AdmZip = require('adm-zip');
+
+    const sourceUrl = "http://localhost:8080/ts.zip";
+    const tmpFilePath = tempDir + "/" + uuid.v4() + ".zip";
+    const generatePath = "src/__generated";
+
+    console.log("Downloading " + sourceUrl + "...");
+
+    const tmpFile = fs.createWriteStream(tmpFilePath);
+
+    const request = http.get(sourceUrl, (response) => {
+        response.pipe(tmpFile);
+        tmpFile.on("finish", () => {
+            tmpFile.close();
+            console.log("File save success: ", tmpFilePath);
+
+            // Remove generatePath if it exists
+            if (fs.existsSync(generatePath)) {
+                console.log("Removing existing generatePath...");
+                fse.removeSync(generatePath);
+                console.log("Existing generatePath removed.");
+            }
+
+            // Unzip the file using adm-zip
+            console.log("Unzipping the file...");
+            const zip = new AdmZip(tmpFilePath);
+            zip.extractAllTo(generatePath, true);
+            console.log("File unzipped successfully.");
+
+            // Remove the temporary file
+            console.log("Removing temporary file...");
+            fs.unlink(tmpFilePath, (err) => {
+                if (err) {
+                    console.error("Error while removing temporary file:", err);
+                } else {
+                    console.log("Temporary file removed.");
+                }
+            });
+        });
+    });
+    ```
+
+    其中，`adm-zip`需要单独安装
+    ```
+    yarn add adm-zip --dev
+    ```
+
+    修改项目的`package.json`，在其"scripts"字段下添加如下代码
+    ```json
+    {
+        ...省略其他代码...
+        "scripts": {
+            ...省略其他代码...
+            //highlight-next-line
+            "api": "node scripts/generate-api.js"
+        }
+        ...省略其他代码...
+    }
+    ```
+
+    这样，每次服务端团队通知REST API发生变化时，都可以简单地执行`yarn api`刷新本地的TypeScript客户端代码
+
+    :::caution
+    这个方法仅仅使用规模很少的前端团队，如果前端对象人数较多，更推荐的做法是对CI环境实施二次开发，实现如下功能：
+    
+    每次服务端特定分支代码被提交后，由CI环境编译并启动后端服务，然后，下载ts代码，解压，并提交到git中。最后，前端工程师统一从git拉取最新代码即可。
+    :::
+
+3.  创建全局API对象
+
+    生成的TypeScript代码中，有一个`__generated/Api.ts`文件，需要用该类实例化一个全局变量并完成必要的配置。
+
+    在`src`下创建`ApiInstance.ts`，定义并导出全部变量`api`
+
+    ```ts title="src/ApiInstance.ts"
+    import { Api } from "../__generated";
+
+    const BASE_URL = "http://localhost:8080";
+
+    // 导出全局变量`api`
+    // highlight-next-line
+    export const api = new Api(async({uri, method, headers, body}) => {
+        const tenant = (window as any).__tenant as string | undefined;
+        const response = await fetch(`${BASE_URL}${uri}`, {
+            method,
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+            headers: {
+                'content-type': 'application/json;charset=UTF-8',
+                ...headers,
+                ...(tenant !== undefined && tenant !== "" ? {tenant} : {})
+            }
+        });
+        if (response.status !== 200) {
+            throw response.json();
+        }
+        const text = await response.text();
+        if (text.length === 0) {
+            return null;
+        }
+        return JSON.parse(text);
+    });
+    ```
+
+4.  调用REST API
+
+    现在，我们就可以基于全局变量`api`调用REST API了。
+
+    :::info 
+    下面的例子，基于[use-immer](https://github.com/immerjs/use-immer)和[TanStack/Query](https://github.com/TanStack/query)。
+
+    熟练使用或快熟掌握各种远程请求库，是web前端工程师的基本素养，所以，这里不再细致交代。
+    :::
+
+    -   体验`api.bookService.findBooks`
+
+        ```ts
+        const [options, setOptions] = useImmer<
+            // RequestOf是Jimmer生成的TypeScript辅助类，
+            // 用于提取任何REST API的参数类型
+            RequestOf<
+                typeof api.bookService.findBooks
+            >
+        >(() => {
+            return {
+                pageIndex: 0,
+                pageSize: 10,
+                sortCode: "name asc"
+            };
+        });
+
+        const { 
+            isLoading, 
+            // 如果`data`非`undefined`, 则其类型必为
+            // `Page<BookDto['BookService/SIMPLE_BOOK']>`
+            // highlight-next-line
+            data, 
+            error, 
+            refetch 
+        } = useQuery({
+            queryKey: ["Books", options],
+            // `data`的类型由此决定
+            // highlight-next-line
+            queryFn: () => api.bookService.findBooks(options) 
+        });
+        ```
+
+        如果请求成功，`data`的类型为`Page<BookDto['BookService/SIMPLE_BOOK']>`。
+
+        其中, `BookDto['BookService/SIMPLE_BOOK']`的定义为
+        ```ts
+        {
+            readonly id: number, 
+            readonly name: string, 
+            readonly edition: number,
+            readonly price: number,
+        }
+        ```
+
+    -   体验`api.bookService.findBookById`
+
+        在下面的代码中，假设`id`为当前React主键的参数
+
+        ```ts
+        const { 
+            // 如果`data`非`undefined`, 则其类型必为
+            // `BookDto['BookService/COMPLEX_BOOK']`
+            // highlight-next-line
+            data, 
+            isLoading, 
+            error 
+        } = useQuery({
+            queryKey: ["book/detail", id],
+            queryFn: () => api.bookService.findBookById({id: id!}),
+            enabled: id !== undefined
+        });
+        ```
+
+        如果请求成功且`data`非null, 其类型为`BookDto['BookService/COMPLEX_BOOK']`。该类型定义如下
+        ```ts
+        {
+            readonly id: number, 
+            readonly name: string, 
+            readonly edition: number, 
+            readonly price: number, 
+            readonly store?: {
+                readonly id: number, 
+                readonly name: string, 
+                readonly website?: string, 
+                readonly avgPrice: number
+            }, 
+            readonly authors: ReadonlyArray<{
+                readonly id: number, 
+                readonly firstName: string, 
+                readonly lastName: string, 
+                readonly gender: Gender
+            }>
+        }
+        ```
+
+    :::tip
+    可见，任何REST API调用都会返回严格的数据类型定义，这些严格的类型定义也会影响`tsx`文件中React UI模板代码。
+
+    这会充分发挥TypeScript的优势，让前端项目具备良好的IDE智能提示，并保证在编译时发现所有问题，具备良好的开发体验。
+    :::
+
+## 和自定义数据结合
+
+虽然`@FetchBy`和Jimmer动态实体相结合能够在客户端代码中还原DTO类型定义，但仍然需要认真考虑一种情况：返回的数据类型和底层实体模型差异很大。例如
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="ActiveAuthorInfo.java"
+@lombok.Data
+public class ActiveAuthorInfo {
+
+    private Author raw;
+
+    private List<BookStore> stores;
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="ActiveAuthorInfo.kt"
+data class ActiveAuthorInfo(
+    val raw: Author,
+    val stores: List<BookStore>
+)
+```
+
+</TabItem>
+</Tabs>
+
+在这个例子中，`ActiveAuthorInfo`表示活跃度很高的作者，里面包含了作者的原始信息`raw`，以及所有售卖他/她的书籍的书店的集合。
+
+对应的HTTP服务接口为
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="AuthorController.java"
+@GetMapping("/authors/mostActive")
+public List<ActiveAuthorInfo> findMostActiveAuthorInfos(
+    @RequestParam(defaultValue = "10") int limit
+) {
+    ...略...
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="AuthorController.kt"
+@GetMapping("/authors/mostActive")
+fun findMostActiveAuthorInfos(
+    @RequestParam(defaultValue = "10") limit: Int
+): List<ActiveAuthorInfo> {
+    ...略...
+}
+```
+
+</TabItem>
+</Tabs>
+
+很明显，这个数据结构和底层实体模型差异较大。在实体模型中，`BookStore`和`Book`之间存在关联，`Book`和`Author`之间也存在关联，但是，`BookStore`和`Author`之间并不存在关联。
+
+:::tip
+某些情况下，客户端需要的数据可能包含多种实体对象，它们之间并不存在直接的ORM关联，只是特定业务层面的一种的联系。
+
+如果这种特定业务层面的联系毫无通用性，那么为实体定义[复杂计算属性](../mapping/advanced/calculated/transient)也并非一个好的选择。
+
+这时，我们可以打破实体对象图的定式思维，用自定义数据表示返回结果，就如同这里的`ActiveAuthorInfo`
+:::
+
+然而，`ActiveAuthorInfo`并不是纯粹的用户自定义数据类型，其内部混合使用了Jimmer实体。我们不妨称之为为混合类型。
+
+可以用`@FetchBy`注解修饰这种混合类型的字段，比如
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="ActiveAuthorInfo.java"
+@lombok.Data
+public class ActiveAuthorInfo {
+
+    // highlight-next-line
+    private @FetchBy("AUTHOR_BOOK") Author raw;
+
+    // highlight-next-line
+    private List<@FetchBy("STORE_BOOK") BookStore> stores;
+
+    private static final Fetcher<Author> AUTHOR_BOOK = 
+        Fetchers.AUTHOR_BOOK
+            .firstName()
+            .lastName();
+
+    private static final Fetcher<BookStore> STORE_BOOK = 
+        Fetchers.AUTHOR_BOOK.name();
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="ActiveAuthorInfo.kt"
+data class ActiveAuthorInfo(
+    
+    // highlight-next-line
+    val raw: @FetchBy("AUTHOR_BOOK") Author,
+
+    // highlight-next-line
+    val stores: List<@FetchBy("STORE_BOOK") BookStore>
+) {
+    companion object {
+
+        private val AUTHOR_FETCHER =
+            newFetcher(Author::class) {
+                firstName()
+                lastName()
+            }
+
+        private val STORE_BOOK = 
+            new Fetcher(BookStore::class) {
+                name()
+            }
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+最终，`ActiveAuthorInfo`所生成的TypeScript相关类型如下 *(为了方便，这里混合了多个TypeScript文件的代码)*
+
+```ts
+export interface ActiveAuthorInfo {
+
+    // highlight-next-line
+    readonly raw: AuthorDto['ActiveAuthorInfo/AUTHOR_BOOK'];
+
+    readonly stores: ReadonlyArray<
+        // highlight-next-line
+        BookStoreDto['ActiveAuthorInfo/STORE_BOOK']
+    >;
+}
+
+export type AuthorDto {
+    // highlight-next-line
+    'ActiveAuthorInfo/AUTHOR_BOOK': {
+        readonly id: number,
+        readonly firstName: string,
+        readonly lastName: string
+    },
+    ...省略其他DTO类型定义...
+}
+
+export type BookStoreDto {
+    // highlight-next-line
+    'ActiveAuthorInfo/STORE_BOOK': {
+        readonly id: number,
+        readonly name: string
+    },
+    ...省略其他DTO类型定义...
+}
+```
+
+## Api分组
+
+有两种方式分组方式
+
+-   Controller级别
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java
+    // highlight-next-line
+    @Api("pc")
+    @RestController
+    public class BookPcController {...略...}
+
+    // highlight-next-line
+    @Api("mobile")
+    @RestController
+    public class BookMobileController {...略...} 
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin
+    // highlight-next-line
+    @Api("pc")
+    @RestController
+    class PcBookController {...略...}
+
+    // highlight-next-line
+    @Api("mobile")
+    @RestController
+    class MobileBookController {...略...} 
+    ```
+
+    </TabItem>
+    </Tabs>
+
+-   Api级别
+
+    <Tabs groupId="language">
+    <TabItem value="java" label="Java">
+
+    ```java title="BookController.java"
+    @RestController
+    public class BookController {
+        
+        // highlight-next-line
+        @Api("pc")
+        @GetMapping("/pc/books")
+        public List<@FetchBy("BOOK_FOR_PC")> findPcBooks(...略...) {
+            ...略...
+        }
+
+        // highlight-next-line
+        @Api("mobile")
+        @GetMapping("/mobile/books")
+        public List<@FetchBy("BOOK_FOR_MOBILE")> findMobileBooks(...略...) {
+            ...略...
+        }
+    }
+    ```
+
+    </TabItem>
+    <TabItem value="kotlin" label="Kotlin">
+
+    ```kotlin title="BookController.kt"
+    @RestController
+    class BookController {
+        
+        // highlight-next-line
+        @Api("pc")
+        @GetMapping("/pc/books")
+        fun findBooks(...略...): List<@FetchBy("BOOK_FOR_PC")> =
+            ...略...
+
+        // highlight-next-line
+        @Api("mobile")
+        @GetMapping("/mobile/books")
+        fun findBooks(...略...): List<@FetchBy("BOOK_FOR_MOBILE")> 
+            ...略...
+    }
+    ```
+
+    </TabItem>
+    </Tabs>
+
+:::tip
+@Api可以接受多个组名，比如`@Api({"group1", "group2", "groupN"})`。为了简化问题，上例未示范
+:::
+
+:::caution
+类级别和方法级别的分组可以混用，此时，方法级的任何组名都必须是类级组名之一，否则无法编译。
+:::
+
+查看/下载客户端的URL如下:
+
+-   http://localhost:8080/openapi.yml
+-   http://localhost:8080/openapi.html
+-   http://localhost:8080/ts.zip
+
+现在，可以通过如下方法只查看/下载PC相关的客户端
+
+-   http://localhost:8080/openapi.yml?groups=pc
+-   http://localhost:8080/openapi.html?groups=pc
+-   http://localhost:8080/ts.zip?groups=pc
+
+同理，也可以只查看/下载Mobile相关的客户端
+
+-   http://localhost:8080/openapi.yml?groups=mobile
+-   http://localhost:8080/openapi.html?groups=mobile
+-   http://localhost:8080/ts.zip?groups=mobile
+
+也可以附加多个参数 *(当然，对于本例而言，这样做和不指定参数效果一样)*
+
+-   http://localhost:8080/openapi.yml?groups=pc,mobile
+-   http://localhost:8080/openapi.html?groups=pc,mobile
+-   http://localhost:8080/ts.zip?groups=pc,mobile

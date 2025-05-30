@@ -1,0 +1,1138 @@
+---
+sidebar_position: 2
+title: 生成客户端异常
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { ViewMore } from '@site/src/components/ViewMore';
+import {VsModule, VsApi, VsFamily, VsCode, VsField} from '@site/src/components/Image';
+
+这部分功能其实和ORM没有关系。
+
+然而，既然提供了[前后端API免对接](./api)，那么就必须提供这部分功能，否则就不是一套完整的方案。
+
+## 异常簇
+
+我们需要定义特别的Java/Kotlin业务异常，它们能够被直接翻译成客户端可以理解的数据。
+
+该如何定义这种特别的业务异常类型呢？有两种极端的选择
+
+-   整个应用程序共享一个业务异常类，并内置客户端可以理解的error code
+
+-   每个业务错误都定义一个业务异常类
+
+很明显，上述两种方案都不合适。第一种方案粒度太粗，全局的error code难以维护；第二种方案粒度太细，需要定义的异常类是在太多了。
+
+所以，Jimmer选择折中方案，把业务异常分为多个簇，每个簇用一套Error Code。
+
+用户可以采用两种方法定义异常簇
+
+-   自动生成
+
+-   纯手写
+
+### 自动生成异常簇
+
+Jimmer采用枚举来定义异常簇，枚举也是这簇异常的错误码，例如
+
+#### 定义异常簇
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserInfoErrorCode.java"
+package com.example.business.error;
+
+import org.babyfish.jimmer.error.ErrorFamily;
+
+// highlight-next-line
+@ErrorFamily
+public enum UserInfoErrorCode {
+    ILLEGAL_USER_NAME,
+    PASSWORD_TOO_SHORT,
+    PASSWORDS_NOT_SAME
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserInfoErrorCode.kt"
+package com.example.business.error
+
+import org.babyfish.jimmer.error.ErrorFamily
+
+// highlight-next-line
+@ErrorFamily
+enum class UserInfoErrorCode {
+    ILLEGAL_USER_NAME,
+    PASSWORD_TOO_SHORT,
+    PASSWORDS_NOT_SAME
+}
+```
+
+</TabItem>
+</Tabs>
+
+`@org.babyfish.jimmer.error.ErrorFamily`表示该枚举表示一簇业务异常，该枚举也是这簇异常的ErrorCode.
+
+注解`@ErrorFamily`会被Jimmer的预编译器处理
+
+:::info
+这里的预编译器，对于Java而言就是Annotation Processor；对于Kotlin而言就是KSP。
+
+这部分类型已经在[概述/快速上手/生成代码](../quick-view/get-started/generate-code)一节中讨论过，此处不在重复。
+:::
+
+预编译器会会根据此枚举生成如下异常类
+
+:::info
+用作声明异常簇的枚举可以选择用`ErrorCode`或`Error`结尾。
+
+-   如果有这样的特殊结尾，异常类名 = 枚举名去掉这样的结尾并加 + `Exception`
+
+-   否则，异常类名 = 枚举名 + `Exception`
+
+所以，这里生成的异常名为`UserInfoException`
+:::
+
+经过Jimmer的编译，将会生成如下的异常类。
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserInfoException.java"
+public abstract class UserInfoException 
+    extends CodeBasedRuntimeException { ❶
+
+    private UserInfoException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    @Override
+    public abstract UserInfoErrorCode getCode(); ❷
+
+    public static IllegalUserName illegalUserName(@NotNull String message) { ❸
+        return new IllegalUserName(
+            message,
+            null
+        );
+    }
+
+    public static IllegalUserName illegalUserName( ❹
+            @NotNull String message,
+            @Nullable Throwable cause
+    ) {
+        return new IllegalUserName(
+            message,
+            cause
+        );
+    }
+
+    public static PasswordTooShort passwordTooShort(@NotNull String message) { ❺
+        return new PasswordTooShort(
+            message,
+            null
+        );
+    }
+
+    public static PasswordTooShort passwordTooShort( ❻
+            @NotNull String message,
+            @Nullable Throwable cause
+    ) {
+        return new PasswordTooShort(
+            message,
+            cause
+        );
+    }
+
+    public static PasswordsNotSame passwordsNotSame(@NotNull String message) { ❼
+        return new PasswordsNotSame(
+            message,
+            null
+        );
+    }
+
+    public static passwordsNotSame passwordsNotSame( ❽
+            @NotNull String message,
+            @Nullable Throwable cause
+    ) {
+        return new PasswordsNotSame(
+            message,
+            cause
+        );
+    }
+
+    public static class IllegalUserName extends UserInfoException {
+        public IllegalUserName(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        @Override
+        public UserInfoErrorCode getCode() {
+            return UserInfoErrorCode.ILLEGAL_USER_NAME; ❾
+        }
+
+        @Override
+        public Map<String, Object> getFields() {
+            return Collections.emptyMap();
+        }
+    }
+
+    public static class PasswordTooShort extends UserInfoException {
+        public PasswordTooShort(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        @Override
+        public UserInfoErrorCode getCode() {
+            return UserInfoErrorCode.PASSWORD_TOO_SHORT; ❿
+        }
+
+        @Override
+        public Map<String, Object> getFields() {
+            return Collections.emptyMap();
+        }
+    }
+
+    public static class PasswordsNotSame extends UserInfoException {
+        public PasswordsNotSame(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        @Override
+        public UserInfoErrorCode getCode() {
+            return UserInfoErrorCode.PASSWORDS_NOT_SAME; ⓫
+        }
+
+        @Override
+        public Map<String, Object> getFields() {
+            return Collections.emptyMap();
+        }
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserInfoException.kt"
+public abstract class UserInfoException private constructor(
+    message: String,
+    cause: Throwable? = null,
+) : CodeBasedRuntimeException(message, cause) { ❶
+
+    public abstract override val code: UserInfoErrorCode ❷
+
+    public companion object {
+        @JvmStatic
+        public fun illegalUserName( ❸❹
+            message: String, 
+            cause: Throwable? = null
+        ): IllegalUserName =
+            IllegalUserName(
+                message,
+                cause
+            )
+
+        @JvmStatic
+        public fun passwordTooShort( ❺❻
+            message: String, 
+            cause: Throwable? = null
+        ): PasswordTooShort =
+            PasswordTooShort(
+                message,
+                cause
+            )
+
+        @JvmStatic
+        public fun passwordsNotSame( ❼❽
+            message: String, 
+            cause: Throwable? = null
+            ): PasswordsNotSame =
+                PasswordsNotSame(
+                    message,
+                    cause
+                )
+    }
+
+    public class IllegalUserName(
+        message: String,
+        cause: Throwable? = null,
+    ) : UserInfoException(message, cause) {
+
+        public override val code: UserInfoErrorCode
+            get() = UserInfoErrorCode.ILLEGAL_USER_NAME ❾
+
+        public override val fields: Map<String, Any?>
+            get() = emptyMap()
+    }
+
+    public class PasswordTooShort(
+        message: String,
+        cause: Throwable? = null,
+    ) : UserInfoException(message, cause) {
+
+        public override val code: UserInfoErrorCode
+            get() = UserInfoErrorCode.PASSWORD_TOO_SHORT ❿
+
+        public override val fields: Map<String, Any?>
+            get() = emptyMap()
+    }
+
+    public class PasswordsNotSame(
+        message: String,
+        cause: Throwable? = null,
+    ) : UserInfoException(message, cause) {
+
+        public override val code: UserInfoErrorCode
+            get() = UserInfoErrorCode.PASSWORDS_NOT_SAME ⓫
+
+        public override val fields: Map<String, Any?>
+            get() = emptyMap()
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+-   ❶ 基于枚举错误码的异常必然继承`org.babyfish.jimmer.error.CodeBasedRuntimeException`
+
+-   ❷ 这一簇异常的错误码的类型为`UserInfoErrorCode`
+
+-   ❸❹ 构建错误码为`ILLEGAL_USER_NAME`的异常的静态方法
+
+-   ❺❻ 构建错误码为`PASSWORD_TOO_SHORT`的异常的静态方法
+
+-   ❼❽ 构建错误码为`PASSWORDS_NOT_SAME`的异常的静态方法
+
+-   ❾ 异常类`UserInfoException.IllegalUserName`的错误码为`ILLEGAL_USER_NAME`
+
+-   ❿ 异常类`UserInfoException.PasswordTooShort`的错误码为`PASSWORD_TOO_SHORT`
+
+-   ⓫ 异常类`UserInfoException.PasswordsNotSame`的错误码为`PASSWORDS_NOT_SAME`
+
+#### 为异常码添加字段
+
+可以为任何一个错误码添加附加字段。
+
+比如，`ILLEGAL_USER_NAME`表示非法的用户名，即用户名包含了非法字符。我们可以为其添加字段`illegalChars`
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserInfoErrorCode.java"
+@ErrorFamily
+public enum UserInfoErrorCode {
+
+    // highlight-next-line
+    @ErrorField(name = "illegalChars", type = Character.class, list = true)
+    ILLEGAL_USER_NAME,
+    
+    PASSWORD_TOO_SHORT,
+
+    PASSWORDS_NOT_SAME
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserInfoErrorCode.kt"
+@ErrorFamily
+enum class UserInfoErrorCode {
+    
+    // highlight-next-line
+    @ErrorField(name = "illegalChars", type = Char::class, list = true)
+    ILLEGAL_USER_NAME,
+
+    PASSWORD_TOO_SHORT,
+    
+    PASSWORDS_NOT_SAME
+}
+```
+
+</TabItem>
+</Tabs>
+
+生成的代码的如下
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserInfoException.java"
+public abstract class UserInfoException extends CodeBasedRuntimeException {
+
+    public static IllegalUserName illegalUserName(
+        @NotNull String message,
+        // highlight-next-line
+        @NotNull List<Character> illegalChars
+    ) {
+        ...省略代码...
+    }
+
+    public static IllegalUserName illegalUserName(
+        @NotNull String message,
+        @Nullable Throwable cause, 
+        // highlight-next-line
+        @NotNull List<Character> illegalChars
+    ) {
+        ...省略代码...
+    }
+
+    public static class IllegalUserName extends UserInfoException {
+
+        @NotNull
+        private final List<Character> illegalChars;
+
+        public IllegalUserName(
+            String message, 
+            Throwable cause,
+            // highlight-next-line
+            @NotNull List<Character> illegalChars
+        ) {
+            super(message, cause);
+            this.illegalChars = illegalChars;
+        }
+
+        @Override
+        public Map<String, Object> getFields() {
+            // highlight-next-line
+            return Collections.singletonMap("illegalChars", illegalChars);
+        }
+
+        @NotNull
+        public List<Character> getIllegalChars() {
+            // highlight-next-line
+            return illegalChars;
+        }
+
+        ...省略其他代码...
+    }
+
+    ...省略其他代码...
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserInfoException.kt"
+public abstract class UserInfoException private constructor(
+    message: String,
+    cause: Throwable? = null,
+) : CodeBasedRuntimeException(message, cause) { ❶
+
+    public abstract override val code: UserInfoErrorCode ❷
+
+    public companion object {
+        
+        @JvmStatic
+        public fun illegalUserName(
+            message: String,
+            cause: Throwable? = null,
+            // highlight-next-line
+            illegalChars: List<Char>,
+        ): IllegalUserName = 
+            ...省略代码...
+
+        ...省略其他代码...
+    }
+
+    public class IllegalUserName(
+        message: String,
+        cause: Throwable? = null,
+        // highlight-next-line
+        public val illegalChars: List<Char>,
+    ) : UserInfoException(message, cause) {
+
+        public override val fields: Map<String, Any?>
+            get() = mapOf(
+                // highlight-next-line
+                "illegalChars" to illegalChars
+            )
+
+        ...省略其他代码...
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+### 手写异常簇
+
+【TODO】
+
+## 为REST API声明异常
+
+### 允许抛出整个异常簇
+
+所谓抛出异常簇中部分异常，就是抛出抽象的异常类型 *(例如：throws UserInfoException)*。
+
+Jimmer允许任何HTTP服务方法抛出异常
+
+-   Java： 使用throws语法
+
+-   Kotlin：使用`@kotlin.Throws`注解
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserController.java"
+package com.example.service;
+
+import org.babyfish.jimmer.client.ThrowsAll;
+
+@PostMapping("/user")
+public void registerUser(
+    @RequestBody RegisterUserInput input
+// highlight-next-line
+) throws UserInfoException {
+    ...省略代码...
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserController.kt"
+package com.example.service
+
+import import org.babyfish.jimmer.client.ThrowsAll
+
+@PostMapping("/user")
+// highlight-next-line
+@Throws(UserInfoException::class)
+fun registerUser(@RequestBody input: RegisterUserInput) {
+    ...省略代码...
+}
+```
+
+</TabItem>
+</Tabs>
+
+### 允许抛出异常簇中部分异常
+
+所谓抛出异常簇中部分异常，就是抛出具体的异常类型 *(例如：throws UserInfoException.PasswordTooShort)*。
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserController.java"
+@PostMapping("/user")
+public void registerUser(
+    @RequestBody RegisterUserInput input
+//highlight-next-line
+) throws UserInfoException.PasswordTooShort {
+    ...省略代码...
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserController.kt"
+@PostMapping("/user")
+// highlight-next-line
+@Throws(UserInfoException.PasswordsNotSame::class)
+fun registerUser(@RequestBody input: RegisterUserInput) {
+    ...省略代码...
+}
+```
+
+</TabItem>
+</Tabs>
+
+### 比较和建议
+
+:::tip
+其实允许抛出整个异常簇就是抛出簇内所有异常。
+
+即，抛出整个异常簇`throws UserInfoException`，其实和抛出具体异常类型列表`throws UserInfoException.IllegalUserName, UserInfoException.PasswordTooShort, UserInfoException.PasswordsNotSame`等价。
+
+建议尽量抛出具体的异常类型列表，以减少客户端需要处理的异常的种类。
+:::
+
+## 导出服务端异常
+
+前面的工作只是声明REST API有可能抛出何种异常。接下来我们讨论在服务端真正抛出异常
+
+### 抛出异常
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserController.java"
+@PostMapping("/user")
+public void registerUser(
+    @RequestBody RegisterUserInput input
+) throws UserInfoException.IllegalUserName {
+    if (...某些条件...) {
+        List<Character> illegalChars = ...略...
+        // highlight-next-line
+        throw UserInfoException.illegalUserName(
+            "The user name is invalid", 
+            illegalChars
+        );
+    }
+    ...省略其他代码...
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserController.kt"
+@PostMapping("/user")
+@Throws(UserInfoException.IllegalUserName::class)
+fun registerUser(@RequestBody input: RegisterUserInput) {
+    if (...某些条件...) {
+        val illegalChars: List<Char> = ...略...
+        // highlight-next-line
+        throw UserInfoException.illegalUserName(
+            "The user name is invalid",
+            illegalChars
+        )
+    }
+    ...省略其他代码...
+}
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+内部代码抛出的异常的种类，不得超过对外声明的种类
+:::
+
+### 将异常消息写入HTTP响应
+
+:::tip
+只要使用了Jimmer的Spring Boot Starter，无需任何工作，服务抛出任何继承自`CodeBasedRuntimeException`的异常都会被自动翻译。
+:::
+
+翻译结果为
+
+```json
+{
+    "family":"USER_INFO_ERROR_CODE",
+    "code":"ILLEGAL_USER_NAME",
+    "illegalChars": ["&", "`", "@"]
+}
+```
+
+为了方便开发和测试，可以在`application.yml`或`application.properties`中配置
+```
+jimmer:
+    error-translator:
+        debug-info-supported: true
+```
+
+此配置将会在HTTP返回中附带便于在开发和测试阶段定位问题的信息。由于内容较长，请点击下面的按钮查看结果。
+
+<ViewMore buttonText="查看结果" title="附带调试信息的异常返回">
+
+```json
+{
+    "family":"USER_INFO_ERROR_CODE",
+    "code":"ILLEGAL_USER_NAME",
+    "illegalChars": ["&", "`", "@"],
+    // highlight-next-line
+    "debugInfo":{
+        "message":"Illegal user name, it contains some illegal chars",
+        "stackFrames":[
+            "org.babyfish.jimmer.spring.java.bll.ErrorService.test(ErrorService.java:18)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+            "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+            "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+            "org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:205)",
+            "org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:150)",
+            "org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117)",
+            "org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:895)",
+            "org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:808)",
+            "org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87)",
+            "org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1067)",
+            "org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:963)",
+            "org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)",
+            "org.springframework.web.servlet.FrameworkServlet.doGet(FrameworkServlet.java:898)",
+            "javax.servlet.http.HttpServlet.service(HttpServlet.java:655)",
+            "org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:883)",
+            "org.springframework.test.web.servlet.TestDispatcherServlet.service(TestDispatcherServlet.java:72)",
+            "javax.servlet.http.HttpServlet.service(HttpServlet.java:764)",
+            "org.springframework.mock.web.MockFilterChain$ServletFilterProxy.doFilter(MockFilterChain.java:167)",
+            "org.springframework.mock.web.MockFilterChain.doFilter(MockFilterChain.java:134)",
+            "org.springframework.test.web.servlet.MockMvc.perform(MockMvc.java:199)",
+            "org.babyfish.jimmer.spring.java.SpringJavaTest.testError(SpringJavaTest.java:632)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+            "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+            "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+            "org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:725)",
+            "org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)",
+            "org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)",
+            "org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:149)",
+            "org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:140)",
+            "org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:84)",
+            "org.junit.jupiter.engine.execution.ExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(ExecutableInvoker.java:115)",
+            "org.junit.jupiter.engine.execution.ExecutableInvoker.lambda$invoke$0(ExecutableInvoker.java:105)",
+            "org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)",
+            "org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)",
+            "org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)",
+            "org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)",
+            "org.junit.jupiter.engine.execution.ExecutableInvoker.invoke(ExecutableInvoker.java:104)",
+            "org.junit.jupiter.engine.execution.ExecutableInvoker.invoke(ExecutableInvoker.java:98)",
+            "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:214)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:210)",
+            "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:135)",
+            "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:66)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:151)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)",
+            "org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)",
+            "java.base/java.util.ArrayList.forEach(ArrayList.java:1511)",
+            "org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:155)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)",
+            "org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)",
+            "java.base/java.util.ArrayList.forEach(ArrayList.java:1511)",
+            "org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:155)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)",
+            "org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)",
+            "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)",
+            "org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)",
+            "org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)",
+            "org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)",
+            "org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)",
+            "org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:108)",
+            "org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:88)",
+            "org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:54)",
+            "org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:67)",
+            "org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:52)",
+            "org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:96)",
+            "org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:75)",
+            "org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.processAllTestClasses(JUnitPlatformTestClassProcessor.java:99)",
+            "org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.access$000(JUnitPlatformTestClassProcessor.java:79)",
+            "org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor.stop(JUnitPlatformTestClassProcessor.java:75)",
+            "org.gradle.api.internal.tasks.testing.SuiteTestClassProcessor.stop(SuiteTestClassProcessor.java:61)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+            "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+            "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+            "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36)",
+            "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24)",
+            "org.gradle.internal.dispatch.ContextClassLoaderDispatch.dispatch(ContextClassLoaderDispatch.java:33)",
+            "org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(ProxyDispatchAdapter.java:94)",
+            "jdk.proxy1/jdk.proxy1.$Proxy2.stop(Unknown Source)",
+            "org.gradle.api.internal.tasks.testing.worker.TestWorker.stop(TestWorker.java:135)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+            "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+            "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+            "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+            "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36)",
+            "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24)",
+            "org.gradle.internal.remote.internal.hub.MessageHubBackedObjectConnection$DispatchWrapper.dispatch(MessageHubBackedObjectConnection.java:182)",
+            "org.gradle.internal.remote.internal.hub.MessageHubBackedObjectConnection$DispatchWrapper.dispatch(MessageHubBackedObjectConnection.java:164)",
+            "org.gradle.internal.remote.internal.hub.MessageHub$Handler.run(MessageHub.java:414)",
+            "org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)",
+            "org.gradle.internal.concurrent.ManagedExecutorImpl$1.run(ManagedExecutorImpl.java:48)",
+            "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)",
+            "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:630)",
+            "org.gradle.internal.concurrent.ThreadFactoryImpl$ManagedThreadRunnable.run(ThreadFactoryImpl.java:56)",
+            "java.base/java.lang.Thread.run(Thread.java:831)"
+        ],
+        // highlight-next-line
+        "causeBy":{
+            "message":null,
+            "stackFrames":[
+                "org.babyfish.jimmer.spring.java.bll.ErrorService.registerUser(ErrorService.java:28)",
+                "org.babyfish.jimmer.spring.java.bll.ErrorService.test(ErrorService.java:16)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+                "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+                "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+                "org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:205)",
+                "org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:150)",
+                "org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117)",
+                "org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:895)",
+                "org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:808)",
+                "org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87)",
+                "org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1067)",
+                "org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:963)",
+                "org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)",
+                "org.springframework.web.servlet.FrameworkServlet.doGet(FrameworkServlet.java:898)",
+                "javax.servlet.http.HttpServlet.service(HttpServlet.java:655)",
+                "org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:883)",
+                "org.springframework.test.web.servlet.TestDispatcherServlet.service(TestDispatcherServlet.java:72)",
+                "javax.servlet.http.HttpServlet.service(HttpServlet.java:764)",
+                "org.springframework.mock.web.MockFilterChain$ServletFilterProxy.doFilter(MockFilterChain.java:167)",
+                "org.springframework.mock.web.MockFilterChain.doFilter(MockFilterChain.java:134)",
+                "org.springframework.test.web.servlet.MockMvc.perform(MockMvc.java:199)",
+                "org.babyfish.jimmer.spring.java.SpringJavaTest.testError(SpringJavaTest.java:632)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+                "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+                "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+                "org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:725)",
+                "org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)",
+                "org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131)",
+                "org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:149)",
+                "org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:140)",
+                "org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:84)",
+                "org.junit.jupiter.engine.execution.ExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(ExecutableInvoker.java:115)",
+                "org.junit.jupiter.engine.execution.ExecutableInvoker.lambda$invoke$0(ExecutableInvoker.java:105)",
+                "org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106)",
+                "org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64)",
+                "org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45)",
+                "org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37)",
+                "org.junit.jupiter.engine.execution.ExecutableInvoker.invoke(ExecutableInvoker.java:104)",
+                "org.junit.jupiter.engine.execution.ExecutableInvoker.invoke(ExecutableInvoker.java:98)",
+                "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:214)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:210)",
+                "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:135)",
+                "org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:66)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:151)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)",
+                "org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)",
+                "java.base/java.util.ArrayList.forEach(ArrayList.java:1511)",
+                "org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:155)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)",
+                "org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)",
+                "java.base/java.util.ArrayList.forEach(ArrayList.java:1511)",
+                "org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:155)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:141)",
+                "org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:139)",
+                "org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:138)",
+                "org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:95)",
+                "org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35)",
+                "org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57)",
+                "org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54)",
+                "org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:108)",
+                "org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:88)",
+                "org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:54)",
+                "org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:67)",
+                "org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:52)",
+                "org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:96)",
+                "org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:75)",
+                "org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.processAllTestClasses(JUnitPlatformTestClassProcessor.java:99)",
+                "org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.access$000(JUnitPlatformTestClassProcessor.java:79)",
+                "org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor.stop(JUnitPlatformTestClassProcessor.java:75)",
+                "org.gradle.api.internal.tasks.testing.SuiteTestClassProcessor.stop(SuiteTestClassProcessor.java:61)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+                "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+                "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+                "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36)",
+                "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24)",
+                "org.gradle.internal.dispatch.ContextClassLoaderDispatch.dispatch(ContextClassLoaderDispatch.java:33)",
+                "org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(ProxyDispatchAdapter.java:94)",
+                "jdk.proxy1/jdk.proxy1.$Proxy2.stop(Unknown Source)",
+                "org.gradle.api.internal.tasks.testing.worker.TestWorker.stop(TestWorker.java:135)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)",
+                "java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:78)",
+                "java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)",
+                "java.base/java.lang.reflect.Method.invoke(Method.java:567)",
+                "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36)",
+                "org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24)",
+                "org.gradle.internal.remote.internal.hub.MessageHubBackedObjectConnection$DispatchWrapper.dispatch(MessageHubBackedObjectConnection.java:182)",
+                "org.gradle.internal.remote.internal.hub.MessageHubBackedObjectConnection$DispatchWrapper.dispatch(MessageHubBackedObjectConnection.java:164)",
+                "org.gradle.internal.remote.internal.hub.MessageHub$Handler.run(MessageHub.java:414)",
+                "org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)",
+                "org.gradle.internal.concurrent.ManagedExecutorImpl$1.run(ManagedExecutorImpl.java:48)",
+                "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)",
+                "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:630)",
+                "org.gradle.internal.concurrent.ThreadFactoryImpl$ManagedThreadRunnable.run(ThreadFactoryImpl.java:56)",
+                "java.base/java.lang.Thread.run(Thread.java:831)"
+            ]
+        }
+    }
+}
+```
+
+</ViewMore>
+
+:::warning
+此配置仅用于辅助开发和测试，绝不能在生产环境中开启此开关！
+
+比如，请在`application-dev.yml`和`application-test.yml`中开启此开关，但绝对不能在`application-prod.yml`中开启。
+:::
+
+## 客户端
+
+### 生成的TypeScript代码
+
+上文中我们已经定义了一个异常簇`USER_INFO_ERROR_CODE`，假如还有另外一个异常簇`PLATFORM_ERROR_CODE`，采用自动生成的方式，原始枚举类型为。
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="PlatformErrorCode.java"
+@ErrorFamily
+public enum PlatformErrorCode {
+    PERMISSION_DENIED,
+    DATA_IS_FROZEN,
+    SERVICE_IS_SUSPENDED,
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="PlatformErrorCode.kt"
+@ErrorFamily
+enum class PlatformErrorCode {
+    PERMISSION_DENIED,
+    DATA_IS_FROZEN,
+    SERVICE_IS_SUSPENDED
+}
+```
+
+</TabItem>
+</Tabs>
+
+假设Controller代码如下
+
+<Tabs groupId="language">
+<TabItem value="java" label="Java">
+
+```java title="UserController.kt"
+@RestController
+public class UserController {
+
+    @PutMapping("/user")
+    public void registerUser(
+        BookInput input
+    // highlight-next-line
+    ) throws
+        UserInfoException,
+        PlatformException.ServiceIsSuspended {
+        ...略...
+    }
+
+    @DeleteMapping("/user")
+    public void deleteUser(
+        long id
+    // highlight-next-line
+    ) throws
+        UserInfoException,
+        PlatformException.PermissionDenied {
+        ...略...
+    }
+}
+```
+
+</TabItem>
+<TabItem value="kotlin" label="Kotlin">
+
+```kotlin title="UserController.kt"
+@RestController
+class UserController {
+
+    @PutMapping("/user")
+    // highlight-next-line
+    @Throws(
+        UserController::class
+        PlatformException.ServiceIsSuspended::class
+    )
+    fun registerUser(
+        input: BookInput
+    ) {
+        ...略...   
+    }
+
+    @DeleteMapping("/user")
+    // highlight-next-line
+    @Throws(
+        UserController::class
+        PlatformException.PermissionDenied::class
+    )
+    fun deleteUser(
+        id: Long
+    ) {
+        ...略...   
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+统计各种异常被Java Web API方法throws子句或Kotlin Web方法的`@Throws`注解使用的情况，不难发现
+
+<table>
+<thead>
+<tr>
+<th colspan="2">USER_INFO_ERROR_CODE</th>
+<th colspan="2">PLATFORM_ERROR_CODE</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ILLEGAL_USER_NAME</td>
+<td>Used</td>
+<td>PERMISSION_DENIED</td>
+<td>Used</td>
+</tr>
+<tr>
+<td>PASSWORD_TOO_SHORT</td>
+<td>Used</td>
+<td>DATA_IS_FROZEN</td>
+<td><b>Not used!</b></td>
+</tr>
+<tr>
+<td>PASSWORD_NOT_SAME</td>
+<td>Used</td>
+<td>SERVICE_IS_SUSPENDED</td>
+<td>Used</td>
+</tr>
+</tbody>
+</table>
+
+:::info
+请注意我们定义了6种具体的异常类型，但是Web Api只`throws`了5种，`PLATFORM_ERROR_CODE`簇中的`DATA_IS_FROZEN`从未被使用，后文会讨论。
+:::
+
+生成的TypeScript代码如下
+
+```ts
+export type AllErrors = ❶
+    {
+        readonly family: "PLATFORM_ERROR_CODE", 
+        readonly code: "SERVICE_IS_SUSPENDED"
+    } |
+    {
+        readonly family: "PLATFORM_ERROR_CODE", 
+        readonly code: "PERMISSION_DENIED"
+    } | 
+    {
+        readonly family: "USER_INFO_ERROR_CODE",
+        readonly code: "ILLEGAL_USER_NAME",
+        // highlight-next-line
+        readonly "illegalChars": ReadonlyArray<number>
+    } | 
+    {
+        readonly family: "USER_INFO_ERROR_CODE",
+        readonly code: "PASSWORDS_NOT_SAME"
+    } | 
+    {
+        readonly family: "USER_INFO_ERROR_CODE",
+        readonly code: "PASSWORD_TOO_SHORT"
+    } |
+    ...省略其他代码...
+;
+
+export type ApiErrors = { ❷
+    "userController": {
+        "registerUser": AllErrors & (
+            {
+                readonly family: 'USER_INFO_ERROR_CODE',
+                readonly code: 'ILLEGAL_USER_NAME',
+                readonly [key:string]: any
+            } | 
+            {
+                readonly family: 'USER_INFO_ERROR_CODE',
+                readonly code: 'PASSWORD_TOO_SHORT',
+                readonly [key:string]: any
+            } | 
+            {
+                readonly family: 'USER_INFO_ERROR_CODE',
+                readonly code: 'PASSWORDS_NOT_SAME',
+                readonly [key:string]: any
+            } | 
+            {
+                readonly family: 'PLATFORM_ERROR_CODE',
+                readonly code: 'SERVICE_IS_SUSPENDED',
+                readonly [key:string]: any
+            }
+        ),
+        "deleteUser": AllErrors & (
+            {
+                readonly family: 'USER_INFO_ERROR_CODE',
+                readonly code: 'ILLEGAL_USER_NAME',
+                readonly [key:string]: any
+            } | 
+            {
+                readonly family: 'USER_INFO_ERROR_CODE',
+                readonly code: 'PASSWORD_TOO_SHORT',
+                readonly [key:string]: any
+            } | 
+            {
+                readonly family: 'USER_INFO_ERROR_CODE',
+                readonly code: 'PASSWORDS_NOT_SAME',
+                readonly [key:string]: any
+            } | 
+            {
+                readonly family: 'PLATFORM_ERROR_CODE',
+                readonly code: 'PERMISSION_DENIED',
+                readonly [key:string]: any
+            }
+        ) 
+    },
+    ...如果还有更多Controller有抛出客户端异常的行为，将会出现在这里...
+};
+```
+
+-   ❶ `AllErrors`定义所有错误类型，包括`family`，`code`以及各异常的自定义字段 *(灰色北京一样)*
+
+    :::info
+    前文我们讨论过，虽然我定义了6种异常，但是只有5种被Web Api使用。因此，TypeScript代码中只有5种错误定义。
+    :::
+
+-   ❷ Web Api种HTTP各接口抛出的错误类型。
+
+### TypeScript IDE的效果
+
+上面的TypeScript代码较多，考虑到部分读者没有TypeScript的背景知识，这里罗列一些IDE的智能提示截图
+
+-   全局类型`ApiErrors`下面有两个选项: `userController`和`bookController`
+
+    <VsModule/>
+
+-   `ApiErrors["userController"]`下面有三个选项: `login`、`logout`和`registerUser`
+
+    <VsApi/>
+
+-   `ApiErrors["userController"]["registerUser"]`的`family`字段有两个选项: `USER_INFO_ERROR_CODE`和`PLATFORM_ERROR_CODE`
+
+    <VsFamily/>
+
+-   一旦`family`被确定为`UserInfoErrorCode`，`code`字段有三个选项: `ILLEGAL_USER_NAME`、`PASSWORD_TOO_SHORT`和`PASSWORDS_NOT_SAME`
+
+    <VsCode/>
+
+-   一旦`code`被确定为`ILLEGAL_USER_NAME`，则可以使用`illegalChars`附加字段   
+
+    <VsField/>
